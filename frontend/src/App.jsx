@@ -184,7 +184,8 @@ function App() {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Footer - Solo visible cuando hay análisis */}
+      {hasAnalysis && (
       <footer className="bg-gray-800 text-gray-300 py-8 mt-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center md:text-left">
@@ -203,7 +204,7 @@ function App() {
               <h3 className="font-semibold text-white mb-2">Tecnología</h3>
               <p className="text-sm">Backend: FastAPI + BioPython</p>
               <p className="text-sm">Frontend: React + Vite</p>
-              <p className="text-sm">IA: Google Gemini 2.0</p>
+              <p className="text-sm">IA: Claude 3.5 Haiku (Anthropic)</p>
             </div>
           </div>
           <div className="mt-6 pt-6 border-t border-gray-700 text-center">
@@ -211,6 +212,7 @@ function App() {
           </div>
         </div>
       </footer>
+      )}
     </div>
   )
 }

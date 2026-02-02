@@ -33,7 +33,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Consultando a Google Gemini...</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Consultando a Claude AI...</h2>
         <p className="text-gray-600">La IA está analizando los resultados científicos</p>
       </div>
     )
@@ -52,7 +52,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
             Validación Científica con IA
           </h2>
           <p className="text-gray-600 text-lg leading-relaxed mb-8">
-            Utilice Google Gemini para validar científicamente los resultados del análisis genómico.
+            Utilice <strong>Claude AI (Anthropic)</strong> para validar científicamente los resultados del análisis genómico.
             La IA comparará los datos con el conocimiento científico establecido sobre E. coli K-12.
           </p>
           <button
@@ -174,7 +174,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-800 mb-2">Validación con IA</h2>
-          <p className="text-gray-600">Análisis científico realizado por Google Gemini</p>
+          <p className="text-gray-600">Análisis científico realizado por <strong>Claude 3.5 Haiku</strong> (Anthropic)</p>
         </div>
         <button
           onClick={onValidate}
