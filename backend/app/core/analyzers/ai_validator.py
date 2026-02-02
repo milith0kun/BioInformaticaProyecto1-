@@ -45,7 +45,7 @@ class ClaudeValidator:
         """
         self.api_key = api_key
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250514"  # Claude Sonnet 4
+        self.model = "claude-3-5-haiku-20241022"  # Claude 3.5 Haiku
         
     def validate_codon_analysis(self, results: Dict[str, Any]) -> AIValidation:
         """
