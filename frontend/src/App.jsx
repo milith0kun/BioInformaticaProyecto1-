@@ -5,13 +5,16 @@ import AnalysisDashboard from './components/AnalysisDashboard'
 import CodonVisualization from './components/CodonVisualization'
 import GeneStatistics from './components/GeneStatistics'
 import DataExport from './components/DataExport'
+import AIValidation from './components/AIValidation'
 import { api } from './services/api'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [files, setFiles] = useState([])
   const [analysisData, setAnalysisData] = useState(null)
+  const [aiValidation, setAiValidation] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isValidatingAI, setIsValidatingAI] = useState(false)
   const [analysisStatus, setAnalysisStatus] = useState('idle')
 
   // Load files on mount
@@ -50,11 +53,32 @@ function App() {
     }
   }
 
+  const runAIValidation = async () => {
+    if (!analysisData) {
+      toast.error('Ejecute el análisis primero')
+      return
+    }
+    
+    setIsValidatingAI(true)
+    try {
+      toast.loading('Validando con IA (Google Gemini)...', { id: 'ai-validation' })
+      const result = await api.validateWithAI()
+      setAiValidation(result)
+      toast.success('Validación IA completada', { id: 'ai-validation' })
+    } catch (error) {
+      console.error('AI Validation error:', error)
+      toast.error('Error en validación IA: ' + (error.response?.data?.detail || error.message), { id: 'ai-validation' })
+    } finally {
+      setIsValidatingAI(false)
+    }
+  }
+
   const tabs = [
     { id: 'dashboard', name: 'Dashboard' },
     { id: 'files', name: 'Archivos' },
     { id: 'codons', name: 'Codones' },
     { id: 'genes', name: 'Genes' },
+    { id: 'ai', name: 'Validación IA' },
     { id: 'export', name: 'Exportar' },
   ]
 
@@ -143,6 +167,14 @@ function App() {
         {activeTab === 'genes' && (
           <GeneStatistics 
             geneData={analysisData?.genes}
+          />
+        )}
+        {activeTab === 'ai' && (
+          <AIValidation
+            validationData={aiValidation}
+            isValidating={isValidatingAI}
+            onValidate={runAIValidation}
+            hasAnalysis={!!analysisData}
           />
         )}
         {activeTab === 'export' && (

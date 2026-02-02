@@ -108,6 +108,13 @@ export const api = {
     return response.data
   },
 
+  // AI Validation endpoint
+  validateWithAI: async (apiKey = null) => {
+    const params = apiKey ? { api_key: apiKey } : {}
+    const response = await axiosInstance.post('/analysis/ai-validation', null, { params })
+    return response.data
+  },
+
   // Export endpoints
   exportJson: () => {
     window.open(`${API_BASE_URL}/export/json`, '_blank')

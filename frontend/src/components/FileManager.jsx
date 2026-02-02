@@ -58,17 +58,43 @@ export default function FileManager({ files, onRefresh }) {
   return (
     <div className="space-y-6">
       {/* Header */}
+      <div className="bg-gradient-to-r from-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <svg className="w-12 h-12 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div className="flex-grow">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">✅ Descarga Programática con Bio.Entrez</h3>
+            <p className="text-gray-700 leading-relaxed mb-3">
+              El genoma de <strong>E. coli K-12 MG1655</strong> fue descargado automáticamente desde <strong>NCBI</strong> usando el módulo <code className="px-2 py-1 bg-white rounded border border-gray-300 text-sm font-mono">Bio.Entrez</code> de BioPython.
+            </p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <span className="text-gray-600">Accession:</span>
+                <strong className="ml-2 text-gray-800">NC_000913.3</strong>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <span className="text-gray-600">Método:</span>
+                <strong className="ml-2 text-gray-800">Entrez.efetch()</strong>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <span className="text-gray-600">Base de datos:</span>
+                <strong className="ml-2 text-gray-800">nucleotide</strong>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <span className="text-gray-600">Formato:</span>
+                <strong className="ml-2 text-gray-800">GenBank</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Archivos Genómicos</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Archivos Detectados</h2>
         <div className="flex space-x-3">
-          <button
-            onClick={handleExtract}
-            disabled={isExtracting}
-            className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-          >
-            <FolderOpenIcon className="h-5 w-5 mr-2" />
-            {isExtracting ? 'Extrayendo...' : 'Extraer ZIP'}
-          </button>
           <button
             onClick={onRefresh}
             className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
