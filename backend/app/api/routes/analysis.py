@@ -378,16 +378,18 @@ async def ai_validation(api_key: Optional[str] = None):
     
     try:
         # Preparar datos para validación
+        stop_codons = _analysis_cache["codons"].stop_codons
+        
         codon_data = {
             "atg_total": _analysis_cache["codons"].atg_count,
             "atg_density": _analysis_cache["codons"].atg_density,
-            "taa_total": _analysis_cache["codons"].stop_codons.taa,
-            "tag_total": _analysis_cache["codons"].stop_codons.tag,
-            "tga_total": _analysis_cache["codons"].stop_codons.tga,
-            "total_stop_codons": (
-                _analysis_cache["codons"].stop_codons.taa +
-                _analysis_cache["codons"].stop_codons.tag +
-                _analysis_cache["codons"].stop_codons.tga
+            "taa_total": stop_codons['TAA'].count if 'TAA' in stop_codons else 0,
+            "tag_total": stop_codons['TAG'].count if 'TAG' in stop_codons else 0,
+            "tga_total": stop_codons['TGA'].count if 'TGA' in stop_codons else 0,
+            "total_stop_codons": sum(
+                stop_codons[codon].count 
+                for codon in ['TAA', 'TAG', 'TGA'] 
+                if codon in stop_codons
             )
         }
         
