@@ -185,10 +185,30 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-gray-400 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p>Proyecto de Bioinformática - Análisis de E. coli K-12 MG1655</p>
-          <p className="text-sm mt-2">Datos: NCBI RefSeq NC_000913.3</p>
+      <footer className="bg-gray-800 text-gray-300 py-8 mt-12">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center md:text-left">
+            <div>
+              <h3 className="font-semibold text-white mb-2">Proyecto</h3>
+              <p className="text-sm">Sistema de Análisis Genómico</p>
+              <p className="text-sm">E. coli K-12 MG1655</p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-white mb-2">Datos</h3>
+              <p className="text-sm">RefSeq: NC_000913.3</p>
+              <p className="text-sm">Descarga: Bio.Entrez (NCBI)</p>
+              <p className="text-sm">Base de datos: nucleotide</p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-white mb-2">Tecnología</h3>
+              <p className="text-sm">Backend: FastAPI + BioPython</p>
+              <p className="text-sm">Frontend: React + Vite</p>
+              <p className="text-sm">IA: Google Gemini 2.0</p>
+            </div>
+          </div>
+          <div className="mt-6 pt-6 border-t border-gray-700 text-center">
+            <p className="text-sm">Proyecto de Bioinformática © {new Date().getFullYear()}</p>
+          </div>
         </div>
       </footer>
     </div>

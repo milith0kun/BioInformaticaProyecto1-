@@ -16,48 +16,40 @@ import { api } from '../services/api'
 const EXPORT_OPTIONS = [
   {
     id: 'json',
-    name: 'JSON Completo',
-    description: 'Todos los resultados del análisis en formato JSON estructurado',
+    name: 'Análisis Completo (JSON)',
+    description: 'Resultados de codones, genes y validación en JSON',
     icon: DocumentTextIcon,
     color: 'bg-blue-500',
     action: () => api.exportJson()
   },
   {
     id: 'csv-genes',
-    name: 'CSV - Genes',
-    description: 'Lista completa de genes con sus propiedades en formato CSV',
+    name: 'Datos de Genes (CSV)',
+    description: 'Tabla de genes con locus_tag, posición, longitud y producto',
     icon: TableCellsIcon,
     color: 'bg-emerald-500',
     action: () => api.exportCsv('genes')
   },
   {
     id: 'csv-codons',
-    name: 'CSV - Codones',
-    description: 'Resultados del análisis de codones en formato CSV',
+    name: 'Análisis de Codones (CSV)',
+    description: 'Codones ATG, TAA, TAG, TGA con conteos y densidad',
     icon: TableCellsIcon,
     color: 'bg-purple-500',
     action: () => api.exportCsv('codons')
   },
   {
     id: 'csv-statistics',
-    name: 'CSV - Estadísticas',
-    description: 'Estadísticas generales del genoma en formato CSV',
+    name: 'Estadísticas Genómicas (CSV)',
+    description: 'Tamaño genoma, GC%, densidad génica, estadísticas de tamaño',
     icon: TableCellsIcon,
     color: 'bg-orange-500',
     action: () => api.exportCsv('statistics')
   },
   {
-    id: 'csv-validation',
-    name: 'CSV - Validación',
-    description: 'Resultados de validación contra valores de referencia',
-    icon: TableCellsIcon,
-    color: 'bg-cyan-500',
-    action: () => api.exportCsv('validation')
-  },
-  {
     id: 'pdf',
-    name: 'Informe PDF',
-    description: 'Informe completo con tablas y gráficos en formato PDF',
+    name: 'Informe Completo (PDF)',
+    description: 'Documento con todas las tablas y estadísticas del análisis',
     icon: DocumentChartBarIcon,
     color: 'bg-red-500',
     action: () => api.exportPdf()
@@ -143,46 +135,46 @@ export default function DataExport({ hasData }) {
         })}
       </div>
 
-      {/* Bulk Export */}
-      <div className="bg-gradient-to-r from-gray-700 to-gray-800 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between">
+      {/* Info Box */}
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl p-6 text-white">
+        <div className="flex items-start space-x-4">
+          <DocumentArrowDownIcon className="h-8 w-8 flex-shrink-0" />
           <div>
-            <h3 className="font-semibold text-lg">Exportación Masiva</h3>
+            <h3 className="font-semibold text-lg mb-2">Formatos de Exportación</h3>
             <p className="text-gray-300 mt-1">
               Descargue todos los formatos disponibles de una vez
             </p>
           </div>
           <button
             onClick={() => {
-              if (!hasData) {
-                toast.error('No hay datos para exportar')
-                return
-              }
-              EXPORT_OPTIONS.forEach(opt => opt.action())
-              toast.success('Descargando todos los archivos...')
-            }}
-            disabled={!hasData}
-            className="px-6 py-3 bg-white text-gray-800 rounded-lg font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          >
-            <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
-            Descargar Todo
-          </button>
+            <p className="text-blue-100 mt-1 text-sm">
+              Los formatos disponibles contienen únicamente datos del análisis genómico realizado:
+            </p>
+            <ul className="mt-3 space-y-1 text-sm text-blue-50">
+              <li>• <strong>JSON:</strong> Codones, genes, estadísticas y validación estructurados</li>
+              <li>• <strong>CSV:</strong> Tablas de datos específicos para análisis en Excel/R/Python</li>
+              <li>• <strong>PDF:</strong> Informe ejecutivo con resumen y tablas principales</li>
+            </ul>
+            <p className="text-blue-100 mt-3 text-sm">
+              No se incluyen archivos del genoma original (.fasta, .gbff) - solo resultados del análisis.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Format Information */}
       <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">Información de Formatos</h3>
+        <h3 className="font-semibold text-gray-800 mb-4">¿Qué contiene cada formato?</h3>
         <div className="space-y-4">
           <div className="flex items-start space-x-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <DocumentTextIcon className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <h4 className="font-medium text-gray-800">JSON</h4>
+              <h4 className="font-medium text-gray-800">JSON - Análisis Completo</h4>
               <p className="text-sm text-gray-500">
-                Formato estructurado ideal para procesamiento programático. Incluye todos los datos 
-                del análisis con metadatos completos.
+                Archivo estructurado con todos los resultados: metadata, análisis de codones (ATG, TAA, TAG, TGA), 
+                lista completa de genes con propiedades, estadísticas genómicas y validación.
               </p>
             </div>
           </div>
@@ -192,10 +184,10 @@ export default function DataExport({ hasData }) {
               <TableCellsIcon className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <h4 className="font-medium text-gray-800">CSV</h4>
+              <h4 className="font-medium text-gray-800">CSV - Datos Tabulares</h4>
               <p className="text-sm text-gray-500">
-                Formato tabular compatible con Excel, Google Sheets y herramientas de análisis. 
-                Perfecto para análisis estadísticos adicionales.
+                Archivos separados por tipo: genes (locus_tag, posición, producto), codones (conteos y densidad), 
+                estadísticas (tamaño, GC%, densidad génica). Compatible con Excel, R, Python.
               </p>
             </div>
           </div>
@@ -205,31 +197,21 @@ export default function DataExport({ hasData }) {
               <DocumentChartBarIcon className="h-5 w-5 text-red-600" />
             </div>
             <div>
-              <h4 className="font-medium text-gray-800">PDF</h4>
+              <h4 className="font-medium text-gray-800">PDF - Informe Ejecutivo</h4>
               <p className="text-sm text-gray-500">
-                Informe formateado con tablas listo para presentación o impresión. Incluye 
-                las principales métricas y resultados de validación.
+                Documento formateado con resumen ejecutivo, tablas de estadísticas principales, 
+                top 10 genes más largos/cortos. Ideal para reportes y presentaciones.
               </p>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Tips */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h4 className="text-sm font-medium text-blue-800">Consejo</h4>
-            <p className="text-sm text-blue-700 mt-1">
-              Para citar estos resultados en publicaciones, use el formato JSON que incluye 
-              metadatos de fecha, versión del análisis y referencia del genoma (NC_000913.3).
-            </p>
-          </div>
+        
+        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm text-amber-800">
+            <strong>Nota:</strong> Los archivos exportados contienen únicamente los resultados del análisis realizado 
+            por el sistema (codones, genes, estadísticas). Los archivos GenBank (.gbff) originales descargados 
+            de NCBI se encuentran en la carpeta <code className="bg-amber-100 px-1 rounded">ncbi_dataset/</code> del proyecto.
+          </p>
         </div>
       </div>
     </div>
