@@ -141,12 +141,6 @@ export default function DataExport({ hasData }) {
           <DocumentArrowDownIcon className="h-8 w-8 flex-shrink-0" />
           <div>
             <h3 className="font-semibold text-lg mb-2">Formatos de Exportación</h3>
-            <p className="text-gray-300 mt-1">
-              Descargue todos los formatos disponibles de una vez
-            </p>
-          </div>
-          <button
-            onClick={() => {
             <p className="text-blue-100 mt-1 text-sm">
               Los formatos disponibles contienen únicamente datos del análisis genómico realizado:
             </p>
