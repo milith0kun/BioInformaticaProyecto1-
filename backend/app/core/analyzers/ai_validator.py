@@ -15,6 +15,7 @@ Fecha: Febrero 2026
 import os
 import json
 import requests
+import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
@@ -44,8 +45,8 @@ class GeminiValidator:
             api_key: API key de Google Gemini
         """
         self.api_key = api_key
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-        self.model = "gemini-pro"
+        self.model = "gemini-2.0-flash"
+        self.base_url = f"https://generativelanguage.googleapis.com/v1/models/{self.model}:generateContent"
         
     def validate_codon_analysis(self, results: Dict[str, Any]) -> AIValidation:
         """
@@ -158,14 +159,7 @@ Responde SOLO en formato JSON:
             return validation
             
         except Exception as e:
-            return AIValidation(
-                is_valid=False,
-                confidence=0.0,
-                interpretation=f"Error en validación IA: {str(e)}",
-                discrepancies=["No se pudo conectar con IA"],
-                recommendations=["Verificar manualmente los resultados"],
-                timestamp=datetime.now().isoformat()
-            )
+            return self._handle_ai_error(e)
     
     def comprehensive_validation(self, full_results: Dict[str, Any]) -> AIValidation:
         """
@@ -215,21 +209,15 @@ Responde SOLO en formato JSON:
             return validation
             
         except Exception as e:
-            return AIValidation(
-                is_valid=False,
-                confidence=0.0,
-                interpretation=f"Error en validación IA: {str(e)}",
-                discrepancies=["No se pudo conectar con IA"],
-                recommendations=["Verificar manualmente los resultados"],
-                timestamp=datetime.now().isoformat()
-            )
+            return self._handle_ai_error(e)
     
-    def _call_gemini(self, prompt: str) -> str:
+    def _call_gemini(self, prompt: str, max_retries: int = 3) -> str:
         """
-        Llamar a la API de Gemini
+        Llamar a la API de Gemini con retry automático
         
         Args:
             prompt: Prompt para el modelo
+            max_retries: Número máximo de reintentos
             
         Returns:
             Respuesta del modelo
@@ -243,7 +231,7 @@ Responde SOLO en formato JSON:
                 }]
             }],
             "generationConfig": {
-                "temperature": 0.2,  # Baja temperatura para respuestas más precisas
+                "temperature": 0.2,
                 "topK": 40,
                 "topP": 0.95,
                 "maxOutputTokens": 2048,
@@ -254,20 +242,122 @@ Responde SOLO en formato JSON:
             "Content-Type": "application/json"
         }
         
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # Extraer texto de la respuesta
+                if "candidates" in data and len(data["candidates"]) > 0:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        parts = candidate["content"]["parts"]
+                        if len(parts) > 0 and "text" in parts[0]:
+                            return parts[0]["text"]
+                
+                raise ValueError("Respuesta de Gemini no tiene el formato esperado")
+                
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                if e.response.status_code == 429:  # Too Many Requests
+                    if attempt < max_retries - 1:
+                        wait_time = (2 ** attempt) * 2  # Backoff exponencial: 2s, 4s, 8s
+                        time.sleep(wait_time)
+                        continue
+                raise  # Re-lanzar si no es 429 o ya no hay más reintentos
+            except Exception as e:
+                last_error = e
+                raise
         
-        data = response.json()
+        if last_error:
+            raise last_error
+    
+    def _handle_ai_error(self, error: Exception) -> AIValidation:
+        """
+        Manejar errores de la API de IA con mensajes específicos
         
-        # Extraer texto de la respuesta
-        if "candidates" in data and len(data["candidates"]) > 0:
-            candidate = data["candidates"][0]
-            if "content" in candidate and "parts" in candidate["content"]:
-                parts = candidate["content"]["parts"]
-                if len(parts) > 0 and "text" in parts[0]:
-                    return parts[0]["text"]
+        Args:
+            error: Excepción capturada
+            
+        Returns:
+            Validación con mensaje de error apropiado
+        """
+        error_msg = str(error)
+        interpretation = f"Error en validación IA: {error_msg}"
+        discrepancies = ["No se pudo conectar con IA"]
+        recommendations = ["Verificar manualmente los resultados"]
         
-        raise ValueError("Respuesta de Gemini no tiene el formato esperado")
+        # Mensajes más específicos según el error
+        if "429" in error_msg or "Too Many Requests" in error_msg:
+            interpretation = "⏱️ Límite de peticiones excedido. La API gratuita de Gemini tiene límites de tasa. Intente nuevamente en unos minutos."
+            discrepancies = ["API temporalmente no disponible por límite de tasa"]
+            recommendations = [
+                "Espere 1-2 minutos antes de reintentar",
+                "Los resultados del análisis son válidos independientemente de la validación IA",
+                "Considere usar una API key con mayor cuota si necesita validación frecuente"
+            ]
+        elif "404" in error_msg:
+            interpretation = "🔧 Modelo o endpoint no disponible. Verifique la configuración de la API."
+            discrepancies = ["Modelo Gemini no encontrado"]
+            recommendations = ["Verificar la API key y el modelo configurado"]
+        elif "401" in error_msg or "403" in error_msg:
+            interpretation = "🔑 API key inválida o sin permisos. Verifique su configuración."
+            discrepancies = ["Autenticación fallida"]
+            recommendations = ["Verificar que la API key sea válida y esté activa"]
+            
+        return AIValidation(
+            is_valid=False,
+            confidence=0.0,
+            interpretation=interpretation,
+            discrepancies=discrepancies,
+            recommendations=recommendations,
+            timestamp=datetime.now().isoformat()
+        )
+    
+    def _handle_ai_error(self, error: Exception) -> AIValidation:
+        """
+        Manejar errores de la API de IA con mensajes específicos
+        
+        Args:
+            error: Excepción capturada
+            
+        Returns:
+            Validación con mensaje de error apropiado
+        """
+        error_msg = str(error)
+        interpretation = f"Error en validación IA: {error_msg}"
+        discrepancies = ["No se pudo conectar con IA"]
+        recommendations = ["Verificar manualmente los resultados"]
+        
+        # Mensajes más específicos según el error
+        if "429" in error_msg or "Too Many Requests" in error_msg:
+            interpretation = "⏱️ Límite de peticiones excedido. La API gratuita de Gemini tiene límites de tasa. Intente nuevamente en unos minutos."
+            discrepancies = ["API temporalmente no disponible por límite de tasa"]
+            recommendations = [
+                "Espere 1-2 minutos antes de reintentar",
+                "Los resultados del análisis son válidos independientemente de la validación IA",
+                "Considere usar una API key con mayor cuota si necesita validación frecuente"
+            ]
+        elif "404" in error_msg:
+            interpretation = "🔧 Modelo o endpoint no disponible. Verifique la configuración de la API."
+            discrepancies = ["Modelo Gemini no encontrado"]
+            recommendations = ["Verificar la API key y el modelo configurado"]
+        elif "401" in error_msg or "403" in error_msg:
+            interpretation = "🔑 API key inválida o sin permisos. Verifique su configuración."
+            discrepancies = ["Autenticación fallida"]
+            recommendations = ["Verificar que la API key sea válida y esté activa"]
+            
+        return AIValidation(
+            is_valid=False,
+            confidence=0.0,
+            interpretation=interpretation,
+            discrepancies=discrepancies,
+            recommendations=recommendations,
+            timestamp=datetime.now().isoformat()
+        )
     
     def _parse_ai_response(self, response: str) -> AIValidation:
         """
