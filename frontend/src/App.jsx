@@ -51,11 +51,11 @@ function App() {
   }
 
   const tabs = [
-    { id: 'dashboard', name: 'Dashboard', icon: '📊' },
-    { id: 'files', name: 'Archivos', icon: '📁' },
-    { id: 'codons', name: 'Codones', icon: '🧬' },
-    { id: 'genes', name: 'Genes', icon: '🔬' },
-    { id: 'export', name: 'Exportar', icon: '📥' },
+    { id: 'dashboard', name: 'Dashboard' },
+    { id: 'files', name: 'Archivos' },
+    { id: 'codons', name: 'Codones' },
+    { id: 'genes', name: 'Genes' },
+    { id: 'export', name: 'Exportar' },
   ]
 
   return (
@@ -74,22 +74,22 @@ function App() {
             <button
               onClick={runAnalysis}
               disabled={isLoading}
-              className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              className={`px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-200 ${
                 isLoading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-white text-emerald-600 hover:bg-emerald-50 hover:shadow-lg'
+                  ? 'bg-gray-400 cursor-not-allowed text-gray-200'
+                  : 'bg-white text-emerald-600 hover:bg-emerald-50 hover:shadow-xl hover:scale-105'
               }`}
             >
               {isLoading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <span className="flex items-center gap-3">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Analizando...
                 </span>
               ) : (
-                '🚀 Ejecutar Análisis'
+                'Ejecutar Análisis'
               )}
             </button>
           </div>
@@ -97,21 +97,23 @@ function App() {
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-white shadow">
+      <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-1">
+          <div className="flex space-x-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-4 font-medium transition-colors ${
+                className={`relative px-6 py-4 font-semibold text-sm uppercase tracking-wide transition-all duration-200 ${
                   activeTab === tab.id
-                    ? 'text-emerald-600 border-b-2 border-emerald-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-emerald-600'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
                 {tab.name}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+                )}
               </button>
             ))}
           </div>

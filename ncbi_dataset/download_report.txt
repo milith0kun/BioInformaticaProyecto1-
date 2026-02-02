@@ -1,0 +1,18 @@
+======================================================================
+REPORTE DE DESCARGA - GENOMA E. COLI K-12 MG1655
+======================================================================
+
+Fecha: 2026-02-01 22:59:19
+Accession: NC_000913.3
+Organismo: Escherichia coli str. K-12 substr. MG1655
+Método: Bio.Entrez (NCBI E-utilities)
+Database: nucleotide
+RetType: gbwithparts
+
+Archivo descargado: genomic.gbff
+Ruta: /home/edmil/temp_sda5_mount/Programacion Fuera de la U/BioInformatica/Proyecto1/ncbi_dataset/ncbi_dataset/data/GCF_000005845.2/genomic.gbff
+Tamaño: 11.33 MB
+MD5: 3b16897af304f4f7c8e5e965f26f258d
+
+Estado: ✅ EXITOSO
+======================================================================

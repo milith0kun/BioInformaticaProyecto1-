@@ -25,6 +25,7 @@ from app.core.genome_parser import GenomeParser
 from app.core.analyzers.codon_analyzer import CodonAnalyzer
 from app.core.analyzers.gene_analyzer import GeneAnalyzer
 from app.core.analyzers.validator import Validator
+from app.core.analyzers.ai_validator import get_ai_validator
 
 router = APIRouter()
 
@@ -350,3 +351,95 @@ async def clear_cache():
         "status": "idle"
     }
     return {"message": "Cache limpiado correctamente"}
+
+
+@router.post("/ai-validation")
+async def ai_validation(api_key: Optional[str] = None):
+    """
+    Validar resultados usando IA (Google Gemini)
+    
+    Args:
+        api_key: API key de Google Gemini (opcional si está en env)
+    """
+    if _analysis_cache["genes"] is None or _analysis_cache["codons"] is None:
+        raise HTTPException(
+            status_code=404, 
+            detail="Ejecute el análisis completo primero."
+        )
+    
+    # Obtener validador de IA
+    validator = get_ai_validator(api_key)
+    
+    if validator is None:
+        raise HTTPException(
+            status_code=400,
+            detail="API key de Gemini no configurada. Proporcione api_key o configure GEMINI_API_KEY."
+        )
+    
+    try:
+        # Preparar datos para validación
+        codon_data = {
+            "atg_total": _analysis_cache["codons"].atg_count,
+            "atg_density": _analysis_cache["codons"].atg_density,
+            "taa_total": _analysis_cache["codons"].stop_codons.taa,
+            "tag_total": _analysis_cache["codons"].stop_codons.tag,
+            "tga_total": _analysis_cache["codons"].stop_codons.tga,
+            "total_stop_codons": (
+                _analysis_cache["codons"].stop_codons.taa +
+                _analysis_cache["codons"].stop_codons.tag +
+                _analysis_cache["codons"].stop_codons.tga
+            )
+        }
+        
+        gene_data = {
+            "total_genes": _analysis_cache["genes"].total_genes,
+            "total_cds": _analysis_cache["genes"].total_cds,
+            "genome_length": _analysis_cache["genes"].genome_length,
+            "gc_content": _analysis_cache["genes"].gc_content,
+            "gene_density": _analysis_cache["genes"].gene_density
+        }
+        
+        # Validar con IA
+        codon_validation = validator.validate_codon_analysis(codon_data)
+        gene_validation = validator.validate_gene_analysis(gene_data)
+        
+        # Validación comprehensiva
+        full_results = {
+            "codons": codon_data,
+            "genes": gene_data
+        }
+        comprehensive = validator.comprehensive_validation(full_results)
+        
+        return {
+            "codon_validation": {
+                "is_valid": codon_validation.is_valid,
+                "confidence": codon_validation.confidence,
+                "interpretation": codon_validation.interpretation,
+                "discrepancies": codon_validation.discrepancies,
+                "recommendations": codon_validation.recommendations,
+                "timestamp": codon_validation.timestamp
+            },
+            "gene_validation": {
+                "is_valid": gene_validation.is_valid,
+                "confidence": gene_validation.confidence,
+                "interpretation": gene_validation.interpretation,
+                "discrepancies": gene_validation.discrepancies,
+                "recommendations": gene_validation.recommendations,
+                "timestamp": gene_validation.timestamp
+            },
+            "comprehensive_validation": {
+                "is_valid": comprehensive.is_valid,
+                "confidence": comprehensive.confidence,
+                "interpretation": comprehensive.interpretation,
+                "discrepancies": comprehensive.discrepancies,
+                "recommendations": comprehensive.recommendations,
+                "timestamp": comprehensive.timestamp
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en validación IA: {str(e)}"
+        )
+
