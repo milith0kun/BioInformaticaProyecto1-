@@ -14,7 +14,7 @@ load_dotenv()
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.api.routes import files, analysis, export
+from app.api.routes import files, analysis, export, genome
 from app.core.file_detector import FileDetector
 
 
@@ -75,6 +75,7 @@ app.add_middleware(
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
+app.include_router(genome.router, prefix="/api/genome", tags=["Genome"])
 
 
 @app.get("/")

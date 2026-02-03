@@ -373,7 +373,7 @@ async def ai_validation(api_key: Optional[str] = None):
     if validator is None:
         raise HTTPException(
             status_code=400,
-            detail="API key de Gemini no configurada. Proporcione api_key o configure GEMINI_API_KEY."
+            detail="API key de Claude no configurada. Proporcione api_key o configure CLAUDE_API_KEY."
         )
     
     try:
@@ -417,6 +417,8 @@ async def ai_validation(api_key: Optional[str] = None):
                 "is_valid": codon_validation.is_valid,
                 "confidence": codon_validation.confidence,
                 "interpretation": codon_validation.interpretation,
+                "scientific_context": codon_validation.scientific_context,
+                "key_findings": codon_validation.key_findings,
                 "discrepancies": codon_validation.discrepancies,
                 "recommendations": codon_validation.recommendations,
                 "timestamp": codon_validation.timestamp
@@ -425,6 +427,8 @@ async def ai_validation(api_key: Optional[str] = None):
                 "is_valid": gene_validation.is_valid,
                 "confidence": gene_validation.confidence,
                 "interpretation": gene_validation.interpretation,
+                "scientific_context": gene_validation.scientific_context,
+                "key_findings": gene_validation.key_findings,
                 "discrepancies": gene_validation.discrepancies,
                 "recommendations": gene_validation.recommendations,
                 "timestamp": gene_validation.timestamp
@@ -433,6 +437,8 @@ async def ai_validation(api_key: Optional[str] = None):
                 "is_valid": comprehensive.is_valid,
                 "confidence": comprehensive.confidence,
                 "interpretation": comprehensive.interpretation,
+                "scientific_context": comprehensive.scientific_context,
+                "key_findings": comprehensive.key_findings,
                 "discrepancies": comprehensive.discrepancies,
                 "recommendations": comprehensive.recommendations,
                 "timestamp": comprehensive.timestamp

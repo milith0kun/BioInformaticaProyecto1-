@@ -127,7 +127,13 @@ Thumbs.db
 # Project specific
 backend/cache/
 backend/extracted/
+backend/genomes/
 *.zip.extracted/
 
-# Large data files (keep ncbi_dataset folder but ignore if too large)
-# ncbi_dataset.zip
+# Large data files
+ncbi_dataset.zip
+ncbi_dataset/
+genomes/
+
+# Local documents
+propuesta.html

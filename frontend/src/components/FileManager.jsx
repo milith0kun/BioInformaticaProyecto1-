@@ -2,13 +2,13 @@
  * FileManager Component
  * Displays detected genomic files from programmatic download
  */
-import { ArrowPathIcon } from '@heroicons/react/24/outline'
-import { api } from '../services/api'
 
 const FILE_TYPE_COLORS = {
-  'GenBank Full Flat File': 'bg-emerald-100 text-emerald-800',
-  'GenBank': 'bg-emerald-100 text-emerald-800',
-  'Text File': 'bg-gray-100 text-gray-800',
+  'GenBank Full Flat File': 'bg-teal-100 text-teal-700',
+  'GenBank': 'bg-teal-100 text-teal-700',
+  'FASTA': 'bg-emerald-100 text-emerald-700',
+  'GFF': 'bg-slate-100 text-slate-700',
+  'Text File': 'bg-slate-100 text-slate-600',
 }
 
 function formatBytes(bytes) {
@@ -20,94 +20,96 @@ function formatBytes(bytes) {
 }
 
 export default function FileManager({ files, onRefresh }) {
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl p-6 mb-6">
+      {/* Header Info */}
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-5">
         <div className="flex items-start gap-4">
-          <div className="flex-shrink-0">
-            <svg className="w-12 h-12 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-12 h-12 bg-teal-500 rounded-xl flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <div className="flex-grow">
-            <h3 className="text-xl font-bold text-gray-800 mb-2">✅ Descarga Programática con Bio.Entrez</h3>
-            <p className="text-gray-700 leading-relaxed mb-3">
-              El genoma de <strong>E. coli K-12 MG1655</strong> fue descargado automáticamente desde <strong>NCBI</strong> usando el módulo <code className="px-2 py-1 bg-white rounded border border-gray-300 text-sm font-mono">Bio.Entrez</code> de BioPython.
+          <div className="flex-1">
+            <h3 className="font-semibold text-slate-800 mb-1">Descarga desde NCBI Datasets API</h3>
+            <p className="text-sm text-slate-600 mb-3">
+              Los archivos genómicos fueron descargados automáticamente desde NCBI usando la API v2.
             </p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <span className="text-gray-600">Accession:</span>
-                <strong className="ml-2 text-gray-800">NC_000913.3</strong>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div className="bg-white rounded-lg p-2 border border-teal-100">
+                <span className="text-slate-500">Formato:</span>
+                <span className="ml-1 font-medium text-slate-700">GenBank</span>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <span className="text-gray-600">Método:</span>
-                <strong className="ml-2 text-gray-800">Entrez.efetch()</strong>
+              <div className="bg-white rounded-lg p-2 border border-teal-100">
+                <span className="text-slate-500">API:</span>
+                <span className="ml-1 font-medium text-slate-700">NCBI v2</span>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <span className="text-gray-600">Base de datos:</span>
-                <strong className="ml-2 text-gray-800">nucleotide</strong>
+              <div className="bg-white rounded-lg p-2 border border-teal-100">
+                <span className="text-slate-500">DB:</span>
+                <span className="ml-1 font-medium text-slate-700">nucleotide</span>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <span className="text-gray-600">Formato:</span>
-                <strong className="ml-2 text-gray-800">GenBank</strong>
+              <div className="bg-white rounded-lg p-2 border border-teal-100">
+                <span className="text-slate-500">Base:</span>
+                <span className="ml-1 font-medium text-slate-700">genome</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Archivos Detectados</h2>
-        <div className="flex space-x-3">
-          <button
-            onClick={onRefresh}
-            className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            <ArrowPathIcon className="h-5 w-5 mr-2" />
-            Actualizar
-          </button>
-        </div>
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-xl font-bold text-slate-800">Archivos Detectados</h2>
+        <button
+          onClick={onRefresh}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Actualizar
+        </button>
       </div>
 
       {/* Files Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {files.length === 0 ? (
-          <div className="col-span-full text-center py-12 bg-white rounded-xl shadow">
-            <DocumentIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No se encontraron archivos genómicos</p>
-            <p className="text-gray-400 text-sm mt-2">
-              Los archivos se descargan automáticamente con Bio.Entrez
+          <div className="col-span-full text-center py-12 bg-white rounded-xl border border-slate-200">
+            <div className="w-16 h-16 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-slate-500">No se encontraron archivos genómicos</p>
+            <p className="text-sm text-slate-400 mt-1">
+              Descarga un genoma primero para ver sus archivos aquí
             </p>
           </div>
         ) : (
           files.map((file, index) => (
             <div
               key={index}
-              className={`bg-white rounded-xl shadow-sm p-4 transition-all hover:shadow-md ${
-                file.is_primary ? 'ring-2 ring-emerald-500' : ''
-              }`}
+              className={`bg-white rounded-xl border p-4 transition-all hover:shadow-md ${file.is_primary ? 'border-teal-300 ring-1 ring-teal-200' : 'border-slate-200'
+                }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate" title={file.filename}>
+                  <p className="font-medium text-slate-800 truncate text-sm" title={file.filename}>
                     {file.filename}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-slate-500 mt-0.5">
                     {formatBytes(file.size_bytes)}
                   </p>
                 </div>
                 {file.is_primary && (
-                  <span className="ml-2 px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full">
+                  <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-700 rounded-full">
                     Principal
                   </span>
                 )}
               </div>
               <div className="mt-3">
-                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                  FILE_TYPE_COLORS[file.file_type] || 'bg-gray-100 text-gray-800'
-                }`}>
+                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${FILE_TYPE_COLORS[file.file_type] || 'bg-slate-100 text-slate-600'
+                  }`}>
                   {file.file_type}
                 </span>
               </div>
@@ -117,21 +119,35 @@ export default function FileManager({ files, onRefresh }) {
       </div>
 
       {/* Summary */}
-      <div className="bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl p-6 text-white">
-        <h3 className="font-semibold mb-2">Resumen de Archivos</h3>
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-3xl font-bold">{files.length}</p>
-            <p className="text-emerald-100">Total archivos</p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold">
-              {files.filter(f => f.extension === '.gbff').length}
-            </p>
-            <p className="text-emerald-100">GenBank</p>
+      {files.length > 0 && (
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl p-5 text-white">
+          <h3 className="font-medium mb-3">Resumen de Archivos</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <p className="text-2xl font-bold">{files.length}</p>
+              <p className="text-teal-100 text-sm">Total archivos</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {files.filter(f => f.extension === '.gbff').length}
+              </p>
+              <p className="text-teal-100 text-sm">GenBank</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {files.filter(f => f.extension === '.fna' || f.extension === '.fasta').length}
+              </p>
+              <p className="text-teal-100 text-sm">FASTA</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {files.filter(f => f.extension === '.gff').length}
+              </p>
+              <p className="text-teal-100 text-sm">GFF</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

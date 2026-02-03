@@ -3,13 +3,6 @@
  * Handles export of analysis results in various formats
  */
 import { useState } from 'react'
-import { 
-  DocumentArrowDownIcon,
-  DocumentTextIcon,
-  TableCellsIcon,
-  DocumentChartBarIcon,
-  ArrowDownTrayIcon
-} from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
 
@@ -17,44 +10,45 @@ const EXPORT_OPTIONS = [
   {
     id: 'json',
     name: 'Análisis Completo (JSON)',
-    description: 'Resultados de codones, genes y validación en JSON',
-    icon: DocumentTextIcon,
-    color: 'bg-blue-500',
+    description: 'Resultados de codones, genes y validación',
+    color: 'teal',
     action: () => api.exportJson()
   },
   {
     id: 'csv-genes',
     name: 'Datos de Genes (CSV)',
-    description: 'Tabla de genes con locus_tag, posición, longitud y producto',
-    icon: TableCellsIcon,
-    color: 'bg-emerald-500',
+    description: 'Tabla con locus_tag, posición, longitud',
+    color: 'emerald',
     action: () => api.exportCsv('genes')
   },
   {
     id: 'csv-codons',
     name: 'Análisis de Codones (CSV)',
-    description: 'Codones ATG, TAA, TAG, TGA con conteos y densidad',
-    icon: TableCellsIcon,
-    color: 'bg-purple-500',
+    description: 'ATG, TAA, TAG, TGA con conteos',
+    color: 'slate',
     action: () => api.exportCsv('codons')
   },
   {
     id: 'csv-statistics',
     name: 'Estadísticas Genómicas (CSV)',
-    description: 'Tamaño genoma, GC%, densidad génica, estadísticas de tamaño',
-    icon: TableCellsIcon,
-    color: 'bg-orange-500',
+    description: 'Tamaño, GC%, densidad génica',
+    color: 'teal',
     action: () => api.exportCsv('statistics')
   },
   {
     id: 'pdf',
     name: 'Informe Completo (PDF)',
-    description: 'Documento con todas las tablas y estadísticas del análisis',
-    icon: DocumentChartBarIcon,
-    color: 'bg-red-500',
+    description: 'Documento con tablas y estadísticas',
+    color: 'emerald',
     action: () => api.exportPdf()
   }
 ]
+
+const colorClasses = {
+  teal: 'bg-teal-500',
+  emerald: 'bg-emerald-500',
+  slate: 'bg-slate-600',
+}
 
 export default function DataExport({ hasData }) {
   const [isExporting, setIsExporting] = useState({})
@@ -66,7 +60,7 @@ export default function DataExport({ hasData }) {
     }
 
     setIsExporting(prev => ({ ...prev, [option.id]: true }))
-    
+
     try {
       toast.loading(`Exportando ${option.name}...`, { id: option.id })
       option.action()
@@ -81,130 +75,98 @@ export default function DataExport({ hasData }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Exportar Datos</h2>
-          <p className="text-gray-500 mt-1">
-            Descargue los resultados del análisis en diferentes formatos
-          </p>
+          <h2 className="text-xl font-bold text-slate-800">Exportar Datos</h2>
+          <p className="text-slate-500 text-sm">Descargue los resultados del análisis</p>
         </div>
         {!hasData && (
-          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+          <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
             Sin datos - ejecute el análisis primero
           </span>
         )}
       </div>
 
-      {/* Export Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {EXPORT_OPTIONS.map((option) => {
-          const Icon = option.icon
-          return (
-            <button
-              key={option.id}
-              onClick={() => handleExport(option)}
-              disabled={!hasData || isExporting[option.id]}
-              className={`relative bg-white rounded-xl shadow-sm p-6 text-left transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed group`}
-            >
-              <div className="flex items-start space-x-4">
-                <div className={`p-3 rounded-xl ${option.color} group-hover:scale-110 transition-transform`}>
-                  <Icon className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800 group-hover:text-gray-900">
-                    {option.name}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {option.description}
-                  </p>
-                </div>
+      {/* Export Options */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {EXPORT_OPTIONS.map((option) => (
+          <button
+            key={option.id}
+            onClick={() => handleExport(option)}
+            disabled={!hasData || isExporting[option.id]}
+            className="bg-white rounded-xl border border-slate-200 p-5 text-left transition-all hover:shadow-md hover:border-teal-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            <div className="flex items-start gap-4">
+              <div className={`w-10 h-10 ${colorClasses[option.color]} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0`}>
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
               </div>
-              
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-slate-800 text-sm">{option.name}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{option.description}</p>
+              </div>
               {isExporting[option.id] ? (
-                <div className="absolute top-4 right-4">
-                  <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                </div>
+                <svg className="w-5 h-5 text-slate-400 animate-spin" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
               ) : (
-                <ArrowDownTrayIcon className="absolute top-4 right-4 h-5 w-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                <svg className="w-5 h-5 text-slate-300 group-hover:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
               )}
-            </button>
-          )
-        })}
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Info Box */}
-      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl p-6 text-white">
-        <div className="flex items-start space-x-4">
-          <DocumentArrowDownIcon className="h-8 w-8 flex-shrink-0" />
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl p-5 text-white">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
           <div>
-            <h3 className="font-semibold text-lg mb-2">Formatos de Exportación</h3>
-            <p className="text-blue-100 mt-1 text-sm">
-              Los formatos disponibles contienen únicamente datos del análisis genómico realizado:
-            </p>
-            <ul className="mt-3 space-y-1 text-sm text-blue-50">
-              <li>• <strong>JSON:</strong> Codones, genes, estadísticas y validación estructurados</li>
-              <li>• <strong>CSV:</strong> Tablas de datos específicos para análisis en Excel/R/Python</li>
-              <li>• <strong>PDF:</strong> Informe ejecutivo con resumen y tablas principales</li>
+            <h3 className="font-medium mb-2">Formatos de Exportación</h3>
+            <ul className="text-sm text-teal-100 space-y-1">
+              <li><strong>JSON:</strong> Todos los datos estructurados</li>
+              <li><strong>CSV:</strong> Tablas para Excel, R o Python</li>
+              <li><strong>PDF:</strong> Informe ejecutivo formateado</li>
             </ul>
-            <p className="text-blue-100 mt-3 text-sm">
-              No se incluyen archivos del genoma original (.fasta, .gbff) - solo resultados del análisis.
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Format Information */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">¿Qué contiene cada formato?</h3>
+      {/* Format Details */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 className="font-semibold text-slate-800 mb-4">¿Qué contiene cada formato?</h3>
         <div className="space-y-4">
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DocumentTextIcon className="h-5 w-5 text-blue-600" />
+          {[
+            { icon: 'teal', title: 'JSON - Análisis Completo', desc: 'Metadata, codones, genes, estadísticas y validación.' },
+            { icon: 'emerald', title: 'CSV - Datos Tabulares', desc: 'Archivos separados: genes, codones, estadísticas.' },
+            { icon: 'slate', title: 'PDF - Informe Ejecutivo', desc: 'Resumen con tablas y top genes.' },
+          ].map((item, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <div className={`w-8 h-8 ${colorClasses[item.icon]} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-medium text-slate-800 text-sm">{item.title}</h4>
+                <p className="text-xs text-slate-500">{item.desc}</p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-medium text-gray-800">JSON - Análisis Completo</h4>
-              <p className="text-sm text-gray-500">
-                Archivo estructurado con todos los resultados: metadata, análisis de codones (ATG, TAA, TAG, TGA), 
-                lista completa de genes con propiedades, estadísticas genómicas y validación.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <TableCellsIcon className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-800">CSV - Datos Tabulares</h4>
-              <p className="text-sm text-gray-500">
-                Archivos separados por tipo: genes (locus_tag, posición, producto), codones (conteos y densidad), 
-                estadísticas (tamaño, GC%, densidad génica). Compatible con Excel, R, Python.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <DocumentChartBarIcon className="h-5 w-5 text-red-600" />
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-800">PDF - Informe Ejecutivo</h4>
-              <p className="text-sm text-gray-500">
-                Documento formateado con resumen ejecutivo, tablas de estadísticas principales, 
-                top 10 genes más largos/cortos. Ideal para reportes y presentaciones.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
-        
-        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm text-amber-800">
-            <strong>Nota:</strong> Los archivos exportados contienen únicamente los resultados del análisis realizado 
-            por el sistema (codones, genes, estadísticas). Los archivos GenBank (.gbff) originales descargados 
-            de NCBI se encuentran en la carpeta <code className="bg-amber-100 px-1 rounded">ncbi_dataset/</code> del proyecto.
+
+        <div className="mt-5 p-4 bg-amber-50 border border-amber-100 rounded-lg">
+          <p className="text-xs text-amber-800">
+            <strong>Nota:</strong> Los archivos exportados contienen solo resultados del análisis.
+            Los archivos GenBank originales están en <code className="bg-amber-100 px-1 rounded">ncbi_dataset/</code>.
           </p>
         </div>
       </div>

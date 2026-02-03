@@ -127,6 +127,54 @@ export const api = {
   exportPdf: () => {
     window.open(`${API_BASE_URL}/export/pdf`, '_blank')
   },
+
+  // Genome endpoints (NCBI Datasets API Integration)
+  searchGenomes: async (query, limit = 10) => {
+    const response = await axiosInstance.get(`/genome/search/${encodeURIComponent(query)}`, {
+      params: { limit }
+    })
+    return response.data
+  },
+
+  getGenomeInfo: async (accession) => {
+    const response = await axiosInstance.get(`/genome/info/${accession}`)
+    return response.data
+  },
+
+  downloadGenome: async (options) => {
+    const response = await axiosInstance.post('/genome/download', options)
+    return response.data
+  },
+
+  getGenomeDownloadStatus: async (accession) => {
+    const response = await axiosInstance.get(`/genome/download-status/${accession}`)
+    return response.data
+  },
+
+  getDownloadedGenomes: async () => {
+    const response = await axiosInstance.get('/genome/downloaded')
+    return response.data
+  },
+
+  activateGenome: async (accession) => {
+    const response = await axiosInstance.post(`/genome/activate/${accession}`)
+    return response.data
+  },
+
+  deleteGenome: async (accession) => {
+    const response = await axiosInstance.delete(`/genome/${accession}`)
+    return response.data
+  },
+
+  getCurrentGenome: async () => {
+    const response = await axiosInstance.get('/genome/current')
+    return response.data
+  },
+
+  getPopularGenomes: async () => {
+    const response = await axiosInstance.get('/genome/popular')
+    return response.data
+  },
 }
 
 export default api
