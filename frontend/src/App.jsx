@@ -7,6 +7,8 @@ import GeneStatistics from './components/GeneStatistics'
 import DataExport from './components/DataExport'
 import AIValidation from './components/AIValidation'
 import GenomeSelector from './components/GenomeSelector'
+import GenomeComparison from './components/GenomeComparison'
+import GeneFilter from './components/GeneFilter'
 import { api } from './services/api'
 
 function App() {
@@ -115,6 +117,8 @@ function App() {
     { id: 'dashboard', name: 'Dashboard' },
     { id: 'codons', name: 'Codones' },
     { id: 'genes', name: 'Genes' },
+    { id: 'filter', name: 'Filtrar Genes' },
+    { id: 'compare', name: 'Comparar' },
     { id: 'files', name: 'Archivos' },
     { id: 'ai', name: 'Validación IA' },
     { id: 'export', name: 'Exportar' },
@@ -489,6 +493,15 @@ function App() {
               )}
               {activeView === 'genes' && (
                 <GeneStatistics geneData={analysisData?.genes} />
+              )}
+              {activeView === 'filter' && (
+                <GeneFilter hasAnalysis={!!analysisData} />
+              )}
+              {activeView === 'compare' && (
+                <GenomeComparison 
+                  hasAnalysis={!!analysisData} 
+                  downloadedGenomes={downloadedGenomes}
+                />
               )}
               {activeView === 'files' && (
                 <FileManager files={files} onRefresh={loadFiles} />

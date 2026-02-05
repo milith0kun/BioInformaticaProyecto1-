@@ -175,6 +175,55 @@ export const api = {
     const response = await axiosInstance.get('/genome/popular')
     return response.data
   },
+
+  // ================== COMPARACIÓN GENÓMICA ==================
+  
+  // Obtener cepas de E. coli relacionadas
+  getRelatedStrains: async (category = null) => {
+    const params = category ? { category } : {}
+    const response = await axiosInstance.get('/genome/related-strains', { params })
+    return response.data
+  },
+
+  // Obtener grupos funcionales disponibles
+  getFunctionalGroups: async () => {
+    const response = await axiosInstance.get('/genome/functional-groups')
+    return response.data
+  },
+
+  // Comparar genomas descargados
+  compareGenomes: async (accessions = null) => {
+    const response = await axiosInstance.post('/genome/compare', null, {
+      params: accessions ? { accessions: accessions.join(',') } : {}
+    })
+    return response.data
+  },
+
+  // Obtener genes por tamaño (mayor o menor)
+  getGenesBySize: async (order = 'largest', count = 10) => {
+    const response = await axiosInstance.get(`/genome/genes/by-size/${order}`, {
+      params: { count }
+    })
+    return response.data
+  },
+
+  // Obtener genes por grupo funcional
+  getGenesByGroup: async (groupId) => {
+    const response = await axiosInstance.get(`/genome/genes/by-group/${groupId}`)
+    return response.data
+  },
+
+  // Búsqueda avanzada de genes
+  searchGenesAdvanced: async (params) => {
+    const response = await axiosInstance.get('/genome/genes/search-advanced', { params })
+    return response.data
+  },
+
+  // Obtener resumen de grupos funcionales
+  getGeneGroupsSummary: async () => {
+    const response = await axiosInstance.get('/genome/genes/groups-summary')
+    return response.data
+  },
 }
 
 export default api

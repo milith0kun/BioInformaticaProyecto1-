@@ -376,3 +376,281 @@ async def get_popular_genomes():
         "count": len(popular),
         "genomes": popular
     }
+
+
+# ================== COMPARACIÓN GENÓMICA ==================
+
+from app.core.analyzers.genome_comparator import (
+    get_genome_comparator, 
+    RELATED_ECOLI_STRAINS,
+    GENE_FUNCTIONAL_GROUPS
+)
+
+
+@router.get("/related-strains")
+async def get_related_strains(category: Optional[str] = None):
+    """
+    Obtener cepas de E. coli emparentadas para comparación
+    
+    Args:
+        category: Filtrar por categoría (laboratory, pathogenic, industrial, probiotic)
+    """
+    comparator = get_genome_comparator()
+    strains = comparator.get_related_strains(category)
+    
+    return {
+        "count": len(strains),
+        "strains": strains,
+        "categories": ["laboratory", "pathogenic", "industrial", "probiotic"]
+    }
+
+
+@router.get("/functional-groups")
+async def get_functional_groups():
+    """
+    Obtener grupos funcionales disponibles para filtrado de genes
+    """
+    groups = []
+    for group_id, info in GENE_FUNCTIONAL_GROUPS.items():
+        groups.append({
+            "id": group_id,
+            "name": info["name"],
+            "description": info["description"],
+            "keywords": info["keywords"]
+        })
+    
+    return {
+        "count": len(groups),
+        "groups": groups
+    }
+
+
+@router.post("/compare")
+async def compare_genomes(request: Request, accessions: Optional[List[str]] = None):
+    """
+    Comparar múltiples genomas descargados
+    
+    Si no se especifican accessions, compara todos los genomas descargados
+    """
+    project_root = request.app.state.project_root
+    comparator = get_genome_comparator()
+    
+    # Obtener directorios de genomas
+    all_genome_dirs = comparator.scan_downloaded_genomes(project_root)
+    
+    if not all_genome_dirs:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay genomas descargados para comparar"
+        )
+    
+    # Filtrar por accessions si se especifican
+    if accessions:
+        genome_dirs = [
+            d for d in all_genome_dirs 
+            if os.path.basename(d) in accessions
+        ]
+    else:
+        genome_dirs = all_genome_dirs
+    
+    if len(genome_dirs) < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Se necesita al menos 1 genoma para analizar"
+        )
+    
+    # Realizar comparación
+    result = comparator.compare_genomes(genome_dirs)
+    
+    if not result:
+        raise HTTPException(
+            status_code=500,
+            detail="Error al comparar genomas"
+        )
+    
+    # Convertir a diccionario serializable
+    return {
+        "comparison_date": result.comparison_date,
+        "total_genomes_compared": result.total_genomes_compared,
+        "genomes": [
+            {
+                "accession": g.accession,
+                "organism_name": g.organism_name,
+                "genome_length": g.genome_length,
+                "gene_count": g.gene_count,
+                "cds_count": g.cds_count,
+                "gc_content": g.gc_content,
+                "gene_density": g.gene_density,
+                "avg_gene_length": g.avg_gene_length,
+                "min_gene_length": g.min_gene_length,
+                "max_gene_length": g.max_gene_length
+            }
+            for g in result.genomes
+        ],
+        "extremes": {
+            "largest_genome": result.largest_genome,
+            "smallest_genome": result.smallest_genome,
+            "highest_gc": result.highest_gc,
+            "lowest_gc": result.lowest_gc,
+            "highest_gene_density": result.highest_gene_density,
+            "lowest_gene_density": result.lowest_gene_density
+        },
+        "longest_genes_global": result.longest_genes_global,
+        "shortest_genes_global": result.shortest_genes_global,
+        "metrics_comparison": result.metrics_comparison
+    }
+
+
+@router.get("/genes/by-size/{order}")
+async def get_genes_by_size(
+    request: Request,
+    order: str = "largest",
+    count: int = 10
+):
+    """
+    Obtener genes ordenados por tamaño (mayor o menor)
+    
+    Args:
+        order: 'largest' o 'smallest'
+        count: Número de genes a retornar (default 10)
+    """
+    from app.api.routes.analysis import _analysis_cache
+    
+    if _analysis_cache["genome_data"] is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay análisis ejecutado. Ejecute el análisis primero."
+        )
+    
+    genome_data = _analysis_cache["genome_data"]
+    comparator = get_genome_comparator()
+    
+    result = comparator.get_genes_by_size(
+        genes=genome_data.genes,
+        order=order,
+        count=count,
+        genome_accession=genome_data.accession
+    )
+    
+    return {
+        "genes": result.genes,
+        "total_count": result.total_count,
+        "filter_applied": result.filter_applied,
+        "genome_source": result.genome_source
+    }
+
+
+@router.get("/genes/by-group/{group_id}")
+async def get_genes_by_group(request: Request, group_id: str):
+    """
+    Obtener genes filtrados por grupo funcional
+    
+    Args:
+        group_id: ID del grupo (metabolism, transport, regulation, etc.)
+    """
+    from app.api.routes.analysis import _analysis_cache
+    
+    if _analysis_cache["genome_data"] is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay análisis ejecutado. Ejecute el análisis primero."
+        )
+    
+    genome_data = _analysis_cache["genome_data"]
+    comparator = get_genome_comparator()
+    
+    result = comparator.filter_genes_by_group(
+        genes=genome_data.genes,
+        group_id=group_id,
+        genome_accession=genome_data.accession
+    )
+    
+    return {
+        "genes": result.genes,
+        "total_count": result.total_count,
+        "filter_applied": result.filter_applied,
+        "genome_source": result.genome_source,
+        "group_info": GENE_FUNCTIONAL_GROUPS.get(group_id, {})
+    }
+
+
+@router.get("/genes/search-advanced")
+async def search_genes_advanced(
+    request: Request,
+    query: Optional[str] = None,
+    min_length: Optional[int] = None,
+    max_length: Optional[int] = None,
+    min_gc: Optional[float] = None,
+    max_gc: Optional[float] = None,
+    strand: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50
+):
+    """
+    Búsqueda avanzada de genes con múltiples filtros
+    """
+    from app.api.routes.analysis import _analysis_cache
+    
+    if _analysis_cache["genome_data"] is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay análisis ejecutado. Ejecute el análisis primero."
+        )
+    
+    genome_data = _analysis_cache["genome_data"]
+    comparator = get_genome_comparator()
+    
+    result = comparator.search_genes_advanced(
+        genes=genome_data.genes,
+        query=query or "",
+        min_length=min_length,
+        max_length=max_length,
+        min_gc=min_gc,
+        max_gc=max_gc,
+        strand=strand,
+        genome_accession=genome_data.accession
+    )
+    
+    # Aplicar paginación
+    total = result.total_count
+    total_pages = (total + page_size - 1) // page_size
+    start = (page - 1) * page_size
+    end = start + page_size
+    
+    return {
+        "genes": result.genes[start:end],
+        "total_count": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "filter_applied": result.filter_applied,
+        "genome_source": result.genome_source
+    }
+
+
+@router.get("/genes/groups-summary")
+async def get_gene_groups_summary(request: Request):
+    """
+    Obtener resumen de genes por grupo funcional
+    """
+    from app.api.routes.analysis import _analysis_cache
+    
+    if _analysis_cache["genome_data"] is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay análisis ejecutado. Ejecute el análisis primero."
+        )
+    
+    genome_data = _analysis_cache["genome_data"]
+    comparator = get_genome_comparator()
+    
+    summaries = comparator.get_gene_groups_summary(
+        genes=genome_data.genes,
+        genome_accession=genome_data.accession
+    )
+    
+    return {
+        "genome": genome_data.accession,
+        "total_genes": len(genome_data.genes),
+        "groups": summaries
+    }
