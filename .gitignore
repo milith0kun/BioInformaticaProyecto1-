@@ -137,3 +137,4 @@ genomes/
 
 # Local documents
 propuesta.html
+backend/.env.backup

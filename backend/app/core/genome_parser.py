@@ -59,6 +59,7 @@ class GenomeParser:
         if self._cached_filepath == filepath and self._cached_genome:
             return self._cached_genome
             
+        print(f"\n🧬 [PARSER] Parseando archivo: {filepath}")
         genes = []
         cds_count = 0
         
@@ -68,28 +69,54 @@ class GenomeParser:
         if not records:
             raise ValueError(f"No records found in {filepath}")
         
-        # For E. coli K-12, typically one main chromosome record
-        # Concatenate if multiple (though usually just one)
-        main_record = records[0]
-        full_sequence = str(main_record.seq)
+        print(f"📊 [PARSER] Total de records en archivo: {len(records)}")
         
-        # If multiple records, we use the first (main chromosome)
-        organism = main_record.annotations.get('organism', 'Unknown')
-        description = main_record.description
-        accession = main_record.id
+        # Concatenate all records (chromosomes + plasmids or contigs)
+        full_sequence = ""
+        all_genes = []
+        all_cds_count = 0
         
-        # Extract genes and CDS
-        for feature in main_record.features:
-            if feature.type == "gene":
-                gene_data = self._extract_gene_data(feature, main_record.seq)
-                if gene_data:
-                    genes.append(gene_data)
-                    
-            elif feature.type == "CDS":
-                cds_count += 1
+        organism = records[0].annotations.get('organism', 'Unknown')
+        description = records[0].description
+        accession = records[0].id
         
-        # Calculate genome GC content using BioPython
-        gc_content = self._calculate_gc_biopython(main_record.seq)
+        # Process each record (chromosome, plasmid, or contig)
+        for idx, record in enumerate(records):
+            sequence_part = str(record.seq)
+            full_sequence += sequence_part
+            
+            if idx == 0:
+                print(f"📏 [PARSER] Record 1: {len(sequence_part):,} bp - {record.description[:80]}")
+            elif idx < 5:
+                print(f"📏 [PARSER] Record {idx+1}: {len(sequence_part):,} bp - {record.description[:80]}")
+            elif idx == 5:
+                print(f"📏 [PARSER] ... y {len(records)-5} records más")
+            
+            # Extract genes and CDS from this record
+            for feature in record.features:
+                if feature.type == "gene":
+                    gene_data = self._extract_gene_data(feature, record.seq)
+                    if gene_data:
+                        all_genes.append(gene_data)
+                        
+                elif feature.type == "CDS":
+                    all_cds_count += 1
+        
+        genes = all_genes
+        cds_count = all_cds_count
+        
+        print(f"📏 [PARSER] Longitud total del genoma: {len(full_sequence):,} bp ({len(records)} records)")
+        print(f"🔬 [PARSER] Organismo: {organism}")
+        print(f"🆔 [PARSER] Accession: {accession}")
+        
+        # Calculate genome GC content using BioPython on the full concatenated sequence
+        from Bio.Seq import Seq
+        full_seq_obj = Seq(full_sequence)
+        gc_content = self._calculate_gc_biopython(full_seq_obj)
+        
+        print(f"🧮 [PARSER] Genes encontrados: {len(genes)}")
+        print(f"🧮 [PARSER] CDS encontrados: {cds_count}")
+        print(f"🧮 [PARSER] GC content: {gc_content:.2f}%\n")
         
         genome_data = GenomeData(
             sequence=full_sequence,

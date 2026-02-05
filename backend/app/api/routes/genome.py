@@ -2,7 +2,7 @@
 Genome API Routes
 Handles genome search, download, and management from NCBI Datasets API
 """
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -72,8 +72,18 @@ download_status = {}
 def get_downloader(request: Request) -> NCBIDownloader:
     """Get or create NCBIDownloader instance"""
     if not hasattr(request.app.state, 'ncbi_downloader'):
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        # Usar el project_root del app.state que se configura en main.py
+        if hasattr(request.app.state, 'project_root'):
+            project_root = request.app.state.project_root
+        else:
+            # Fallback: calcular desde la ubicación actual
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+            print(f"⚠️ [DOWNLOADER] project_root no encontrado en app.state, usando fallback")
+        
         download_dir = os.path.join(project_root, "genomes")
+        
+        print(f"🔧 [DOWNLOADER] Inicializando con project_root: {project_root}")
+        print(f"🔧 [DOWNLOADER] download_dir: {download_dir}")
         
         # Get API key from environment if available
         api_key = os.environ.get("NCBI_API_KEY")
@@ -97,9 +107,7 @@ async def search_genomes(query: str, request: Request, limit: int = 10):
     
     results = downloader.search_genomes(query, limit)
     
-    if not results:
-        raise HTTPException(status_code=404, detail=f"No se encontraron genomas para: {query}")
-    
+    # Always return 200, even if no results
     return {
         "query": query,
         "count": len(results),
@@ -175,34 +183,52 @@ async def download_genome(download_req: DownloadRequest, request: Request, backg
         }
     
     def download_task():
-        result = downloader.download_genome(
-            accession=accession,
-            include_gbff=download_req.include_gbff,
-            include_gff=download_req.include_gff,
-            include_fasta=download_req.include_fasta,
-            include_protein=download_req.include_protein,
-            include_cds=download_req.include_cds,
-            include_rna=download_req.include_rna,
-            callback=update_status
-        )
-        
-        if result["success"]:
-            download_status[accession] = {
-                "status": "completed",
-                "message": f"Descarga completada: {len(result['files'])} archivos",
-                "accession": accession,
-                "result": result
-            }
+        print(f"🔽 [DOWNLOAD] Iniciando descarga de {accession}")
+        try:
+            result = downloader.download_genome(
+                accession=accession,
+                include_gbff=download_req.include_gbff,
+                include_gff=download_req.include_gff,
+                include_fasta=download_req.include_fasta,
+                include_protein=download_req.include_protein,
+                include_cds=download_req.include_cds,
+                include_rna=download_req.include_rna,
+                callback=update_status
+            )
             
-            # Save genome info
-            if result.get("genome_info"):
-                info_path = os.path.join(result["download_dir"], "genome_info.json")
-                with open(info_path, 'w') as f:
-                    json.dump(result["genome_info"], f, indent=2)
-        else:
+            print(f"🔽 [DOWNLOAD] Resultado para {accession}: success={result.get('success')}")
+            print(f"🔽 [DOWNLOAD] download_dir: {result.get('download_dir')}")
+            print(f"🔽 [DOWNLOAD] files: {result.get('files', [])}")
+            
+            if result["success"]:
+                download_status[accession] = {
+                    "status": "completed",
+                    "message": f"Descarga completada: {len(result['files'])} archivos",
+                    "accession": accession,
+                    "result": result
+                }
+                print(f"✅ [DOWNLOAD] {accession} completado exitosamente")
+                
+                # Save genome info
+                if result.get("genome_info"):
+                    info_path = os.path.join(result["download_dir"], "genome_info.json")
+                    with open(info_path, 'w') as f:
+                        json.dump(result["genome_info"], f, indent=2)
+            else:
+                error_msg = result.get("error", "Error desconocido")
+                print(f"❌ [DOWNLOAD] {accession} falló: {error_msg}")
+                download_status[accession] = {
+                    "status": "error",
+                    "message": error_msg,
+                    "accession": accession
+                }
+        except Exception as e:
+            print(f"❌ [DOWNLOAD] Error en descarga de {accession}: {str(e)}")
+            import traceback
+            print(f"❌ [DOWNLOAD] Traceback: {traceback.format_exc()}")
             download_status[accession] = {
                 "status": "error",
-                "message": result.get("error", "Error desconocido"),
+                "message": f"Error en descarga: {str(e)}",
                 "accession": accession
             }
     
@@ -426,30 +452,58 @@ async def get_functional_groups():
 
 
 @router.post("/compare")
-async def compare_genomes(request: Request, accessions: Optional[List[str]] = None):
+async def compare_genomes(
+    request: Request, 
+    accessions: Optional[str] = Query(None, description="Comma-separated list of accession numbers")
+):
     """
     Comparar múltiples genomas descargados
     
     Si no se especifican accessions, compara todos los genomas descargados
     """
+    print(f"🔍 [COMPARE] Iniciando comparación con accessions: {accessions}")
     project_root = request.app.state.project_root
+    print(f"🔍 [COMPARE] project_root: {project_root}")
+    
+    # Convertir string separado por comas a lista
+    accession_list = None
+    if accessions:
+        accession_list = [acc.strip() for acc in accessions.split(',')]
+        print(f"🔍 [COMPARE] accession_list: {accession_list}")
+    
     comparator = get_genome_comparator()
     
     # Obtener directorios de genomas
     all_genome_dirs = comparator.scan_downloaded_genomes(project_root)
+    print(f"🔍 [COMPARE] all_genome_dirs encontrados: {len(all_genome_dirs)}")
+    print(f"🔍 [COMPARE] Directorios: {all_genome_dirs}")
     
     if not all_genome_dirs:
+        print("❌ [COMPARE] No hay genomas descargados")
         raise HTTPException(
             status_code=404,
-            detail="No hay genomas descargados para comparar"
+            detail="No hay genomas descargados. Primero debes descargar los genomas seleccionados."
         )
     
     # Filtrar por accessions si se especifican
-    if accessions:
+    if accession_list:
+        print(f"🔍 [COMPARE] Filtrando genomas por accession_list: {accession_list}")
         genome_dirs = [
             d for d in all_genome_dirs 
-            if os.path.basename(d) in accessions
+            if os.path.basename(d) in accession_list
         ]
+        print(f"🔍 [COMPARE] genome_dirs después del filtro: {genome_dirs}")
+        print(f"🔍 [COMPARE] Basenames: {[os.path.basename(d) for d in genome_dirs]}")
+        
+        # Verificar cuáles genomas faltan
+        found_accessions = {os.path.basename(d) for d in genome_dirs}
+        missing_accessions = set(accession_list) - found_accessions
+        
+        if missing_accessions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Los siguientes genomas no están descargados: {', '.join(missing_accessions)}. Descárgalos primero antes de comparar."
+            )
     else:
         genome_dirs = all_genome_dirs
     
@@ -467,6 +521,21 @@ async def compare_genomes(request: Request, accessions: Optional[List[str]] = No
             status_code=500,
             detail="Error al comparar genomas"
         )
+    
+    # Store genome data for dynamic validation
+    from app.api.routes.analysis import _analysis_cache
+    _analysis_cache["compared_genomes"] = [
+        {
+            "accession": g.accession,
+            "organism_name": g.organism_name,
+            "genome_length": g.genome_length,
+            "total_genes": g.gene_count,
+            "total_cds": g.cds_count,
+            "gc_content": g.gc_content,
+            "gene_density": g.gene_density
+        }
+        for g in result.genomes
+    ]
     
     # Convertir a diccionario serializable
     return {

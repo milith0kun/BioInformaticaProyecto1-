@@ -273,16 +273,31 @@ class GenomeComparator:
             Lista de rutas a directorios de genomas
         """
         genomes = []
-        ncbi_data_path = os.path.join(base_path, "ncbi_dataset", "ncbi_dataset", "data")
         
-        if not os.path.exists(ncbi_data_path):
+        # Buscar en el directorio genomes/ del proyecto
+        genomes_path = os.path.join(base_path, "genomes")
+        print(f"🔍 [COMPARATOR] Buscando genomas en: {genomes_path}")
+        
+        if not os.path.exists(genomes_path):
+            print(f"❌ [COMPARATOR] El directorio no existe: {genomes_path}")
             return genomes
         
-        for item in os.listdir(ncbi_data_path):
-            item_path = os.path.join(ncbi_data_path, item)
-            if os.path.isdir(item_path) and (item.startswith("GCF_") or item.startswith("GCA_")):
-                genomes.append(item_path)
+        print(f"✓ [COMPARATOR] El directorio existe, listando contenido...")
+        for item in os.listdir(genomes_path):
+            if not (item.startswith("GCF_") or item.startswith("GCA_")):
+                continue
+            
+            # La estructura descargada es: genomes/GCF_XXXXX/extracted/ncbi_dataset/data/GCF_XXXXX/
+            item_base_path = os.path.join(genomes_path, item)
+            actual_genome_dir = os.path.join(item_base_path, "extracted", "ncbi_dataset", "data", item)
+            
+            if os.path.isdir(actual_genome_dir):
+                print(f"✓ [COMPARATOR] Genoma encontrado: {item} (ruta: {actual_genome_dir})")
+                genomes.append(actual_genome_dir)
+            else:
+                print(f"⚠️ [COMPARATOR] No se encontró estructura correcta para: {item}")
         
+        print(f"🔍 [COMPARATOR] Total genomas encontrados: {len(genomes)}")
         return genomes
     
     def compare_genomes(self, genome_dirs: List[str]) -> GenomeComparisonResult:

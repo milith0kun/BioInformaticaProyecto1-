@@ -19,7 +19,31 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-export default function FileManager({ files, onRefresh }) {
+export default function FileManager({ files, onRefresh, selectedGenomes }) {
+  // Filtrar archivos solo de los genomas seleccionados/analizados
+  const filteredFiles = selectedGenomes && selectedGenomes.length > 0
+    ? files.filter(file => {
+        const pathMatch = file.filepath.match(/(GCF_\d+\.\d+|GCA_\d+\.\d+)/)
+        const accession = pathMatch ? pathMatch[1] : null
+        return accession && selectedGenomes.includes(accession)
+      })
+    : files
+
+  // Agrupar archivos por accession
+  const filesByGenome = filteredFiles.reduce((acc, file) => {
+    // Extraer accession del filepath
+    const pathMatch = file.filepath.match(/(GCF_\d+\.\d+|GCA_\d+\.\d+)/)
+    const accession = pathMatch ? pathMatch[1] : 'unknown'
+    
+    if (!acc[accession]) {
+      acc[accession] = []
+    }
+    acc[accession].push(file)
+    return acc
+  }, {})
+
+  const genomeCount = Object.keys(filesByGenome).length
+
   return (
     <div className="space-y-6">
       {/* Header Info */}
@@ -31,9 +55,9 @@ export default function FileManager({ files, onRefresh }) {
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-slate-800 mb-1">Descarga desde NCBI Datasets API</h3>
+            <h3 className="font-semibold text-slate-800 mb-1">Archivos de {genomeCount} genoma{genomeCount > 1 ? 's' : ''}</h3>
             <p className="text-sm text-slate-600 mb-3">
-              Los archivos genómicos fueron descargados automáticamente desde NCBI usando la API v2.
+              Archivos genómicos descargados desde NCBI Datasets API v2
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div className="bg-white rounded-lg p-2 border border-teal-100">
@@ -71,22 +95,31 @@ export default function FileManager({ files, onRefresh }) {
         </button>
       </div>
 
-      {/* Files Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {files.length === 0 ? (
-          <div className="col-span-full text-center py-12 bg-white rounded-xl border border-slate-200">
-            <div className="w-16 h-16 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <p className="text-slate-500">No se encontraron archivos genómicos</p>
-            <p className="text-sm text-slate-400 mt-1">
-              Descarga un genoma primero para ver sus archivos aquí
-            </p>
+      {/* Files by Genome */}
+      {filteredFiles.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <div className="w-16 h-16 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
           </div>
-        ) : (
-          files.map((file, index) => (
+          <p className="text-slate-500">No se encontraron archivos genómicos</p>
+          <p className="text-sm text-slate-400 mt-1">
+            {selectedGenomes && selectedGenomes.length > 0 
+              ? 'Los genomas seleccionados no tienen archivos disponibles'
+              : 'Analiza genomas primero para ver sus archivos aquí'}
+          </p>
+        </div>
+      ) : (
+        Object.entries(filesByGenome).map(([accession, genomeFiles]) => (
+          <div key={accession} className="space-y-3">
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+              <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
+              {accession}
+              <span className="text-sm text-slate-500 font-normal">({genomeFiles.length} archivos)</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {genomeFiles.map((file, index) => (
             <div
               key={index}
               className={`bg-white rounded-xl border p-4 transition-all hover:shadow-md ${file.is_primary ? 'border-teal-300 ring-1 ring-teal-200' : 'border-slate-200'
@@ -114,34 +147,36 @@ export default function FileManager({ files, onRefresh }) {
                 </span>
               </div>
             </div>
-          ))
-        )}
-      </div>
+            ))}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* Summary */}
-      {files.length > 0 && (
+      {filteredFiles.length > 0 && (
         <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl p-5 text-white">
           <h3 className="font-medium mb-3">Resumen de Archivos</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
-              <p className="text-2xl font-bold">{files.length}</p>
+              <p className="text-2xl font-bold">{filteredFiles.length}</p>
               <p className="text-teal-100 text-sm">Total archivos</p>
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {files.filter(f => f.extension === '.gbff').length}
+                {filteredFiles.filter(f => f.extension === '.gbff').length}
               </p>
               <p className="text-teal-100 text-sm">GenBank</p>
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {files.filter(f => f.extension === '.fna' || f.extension === '.fasta').length}
+                {filteredFiles.filter(f => f.extension === '.fna' || f.extension === '.fasta').length}
               </p>
               <p className="text-teal-100 text-sm">FASTA</p>
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {files.filter(f => f.extension === '.gff').length}
+                {filteredFiles.filter(f => f.extension === '.gff').length}
               </p>
               <p className="text-teal-100 text-sm">GFF</p>
             </div>

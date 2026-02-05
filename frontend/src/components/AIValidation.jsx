@@ -3,8 +3,10 @@
  * Displays AI-powered scientific validation results with bioinformatics focus
  */
 
-export default function AIValidation({ validationData, isValidating, onValidate, hasAnalysis }) {
-  if (!hasAnalysis) {
+export default function AIValidation({ validationData, isValidating, onValidate, hasAnalysis, comparisonData, selectedGenomes }) {
+  const analysisType = selectedGenomes && selectedGenomes.length > 1 ? 'comparison' : 'single'
+  
+  if (!hasAnalysis && !comparisonData) {
     return (
       <div className="text-center py-20">
         <div className="max-w-xl mx-auto">
@@ -15,7 +17,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
           </div>
           <h2 className="text-xl font-bold text-slate-800 mb-3">Validación Científica con IA</h2>
           <p className="text-slate-600">
-            Primero ejecute el análisis del genoma para validar con IA.
+            Primero ejecute el análisis para validar con IA.
           </p>
         </div>
       </div>
@@ -43,13 +45,21 @@ export default function AIValidation({ validationData, isValidating, onValidate,
           </div>
           <h2 className="text-xl font-bold text-slate-800 mb-3">Validación Científica con IA</h2>
           <p className="text-slate-600 mb-6">
-            Use <strong>Claude AI (Anthropic)</strong> para validar los resultados contra conocimiento científico establecido de <em>E. coli</em> K-12 MG1655.
+            {analysisType === 'comparison' ? (
+              <>
+                Use <strong>Claude AI</strong> para validar la comparación de {selectedGenomes?.length || 0} genomas.
+              </>
+            ) : (
+              <>
+                Use <strong>Claude AI</strong> para validar los resultados contra conocimiento científico de <em>E. coli</em>.
+              </>
+            )}
           </p>
           <button
             onClick={onValidate}
             className="px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-semibold hover:from-teal-700 hover:to-emerald-700 transition-all shadow-lg"
           >
-            Ejecutar Validación Científica
+            Ejecutar Validación Científica {analysisType === 'comparison' ? '(Comparación)' : ''}
           </button>
         </div>
       </div>

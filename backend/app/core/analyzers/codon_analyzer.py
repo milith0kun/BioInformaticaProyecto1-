@@ -13,6 +13,7 @@ en la sección 7.1 del informe técnico.
 from Bio.Seq import Seq
 from typing import Dict, Tuple, List, Union
 from dataclasses import dataclass
+import numpy as np
 
 
 @dataclass
@@ -22,6 +23,8 @@ class CodonAnalysisResult:
     atg_density: float
     stop_codons: Dict[str, Dict]
     gene_comparison: Dict[str, int]
+    spatial_distribution: Dict = None  # Nueva: distribución espacial
+    statistical_quality: Dict = None   # Nueva: métricas de calidad
 
 
 class CodonAnalyzer:
@@ -41,23 +44,135 @@ class CodonAnalyzer:
     def __init__(self):
         self._last_result: CodonAnalysisResult = None
         self._seq_object: Seq = None
+        self._atg_positions: List[int] = []  # Nueva: almacenar posiciones
+    
+    def _analyze_spatial_distribution(self, positions: List[int], genome_length: int, num_windows: int = 100) -> Dict:
+        """
+        Analiza la distribución espacial de codones a lo largo del genoma.
+        Calcula desviación estándar, varianza y coeficiente de variación.
+        
+        Args:
+            positions: Lista de posiciones de codones
+            genome_length: Tamaño total del genoma
+            num_windows: Número de ventanas para dividir el genoma
+        
+        Returns:
+            Dict con estadísticas de distribución espacial
+        """
+        if not positions or genome_length == 0:
+            return {
+                'mean_per_window': 0,
+                'median_per_window': 0,
+                'std_deviation': 0,
+                'variance': 0,
+                'coefficient_of_variation': 0,
+                'uniformity_score': 0
+            }
+        
+        # Dividir genoma en ventanas
+        window_size = genome_length // num_windows
+        count_per_window = [0] * num_windows
+        
+        for pos in positions:
+            window_idx = min(pos // window_size, num_windows - 1)
+            count_per_window[window_idx] += 1
+        
+        # Calcular estadísticas
+        counts_array = np.array(count_per_window)
+        mean = float(np.mean(counts_array))
+        std_dev = float(np.std(counts_array))
+        
+        # Coeficiente de variación (menor = más uniforme)
+        cv = (std_dev / mean * 100) if mean > 0 else 0
+        
+        # Score de uniformidad (100 = perfectamente uniforme)
+        uniformity = max(0, 100 - cv)
+        
+        # Calcular distancias entre codones consecutivos
+        if len(positions) > 1:
+            sorted_pos = sorted(positions)
+            distances = np.diff(sorted_pos)
+            mean_distance = float(np.mean(distances))
+            std_distance = float(np.std(distances))
+        else:
+            mean_distance = 0
+            std_distance = 0
+        
+        return {
+            'mean_per_window': round(mean, 2),
+            'median_per_window': round(float(np.median(counts_array)), 2),
+            'std_deviation': round(std_dev, 3),
+            'variance': round(float(np.var(counts_array)), 3),
+            'coefficient_of_variation': round(cv, 2),
+            'uniformity_score': round(uniformity, 1),
+            'min_per_window': int(np.min(counts_array)),
+            'max_per_window': int(np.max(counts_array)),
+            'mean_distance_between_codons': round(mean_distance, 1),
+            'std_distance_between_codons': round(std_distance, 1),
+            'num_windows': num_windows,
+            'window_size_bp': window_size
+        }
+    
+    def _calculate_statistical_quality(self, atg_count: int, total_stops: int, genome_length: int, annotated_genes: int) -> Dict:
+        """
+        Calcula métricas de calidad estadística del análisis.
+        Compara con valores esperados para minimizar desviación.
+        
+        Args:
+            atg_count: Cantidad de ATG encontrados
+            total_stops: Total de stop codons
+            genome_length: Tamaño del genoma
+            annotated_genes: Genes anotados oficialmente
+        
+        Returns:
+            Dict con métricas de calidad
+        """
+        # Ratio ATG/Stop (ideal ~1.0 para genomas bacterianos)
+        atg_stop_ratio = atg_count / total_stops if total_stops > 0 else 0
+        
+        # Desviación de genes esperados vs encontrados
+        if annotated_genes > 0:
+            gene_deviation_pct = abs(atg_count - annotated_genes) / annotated_genes * 100
+            accuracy = max(0, 100 - gene_deviation_pct)
+        else:
+            gene_deviation_pct = 0
+            accuracy = 0
+        
+        # Densidad esperada para E. coli: ~0.8-1.2 ATG per kb
+        expected_density_min = 0.8
+        expected_density_max = 1.2
+        actual_density = (atg_count / genome_length) * 1000
+        
+        density_within_expected = expected_density_min <= actual_density <= expected_density_max
+        
+        return {
+            'atg_stop_ratio': round(atg_stop_ratio, 3),
+            'gene_count_accuracy': round(accuracy, 1),
+            'gene_deviation_percent': round(gene_deviation_pct, 2),
+            'density_within_expected_range': density_within_expected,
+            'expected_density_range': f"{expected_density_min}-{expected_density_max}",
+            'actual_density': round(actual_density, 3),
+            'analysis_quality_score': round((accuracy + (100 if density_within_expected else 50)) / 2, 1)
+        }
     
     def analyze(self, sequence: Union[str, Seq], annotated_genes: int = 0) -> CodonAnalysisResult:
         """
         Perform comprehensive codon analysis on a sequence using BioPython
         
-        Implementación del algoritmo 7.1 del informe:
+        Implementación del algoritmo 7.1 del informe con mejoras estadísticas:
         - Cargar genoma usando Bio.Seq
         - Buscar ATG usando seq.count("ATG")
         - Buscar codones stop usando seq.count()
         - Calcular densidad: (count / genome_length) * 1000
+        - Calcular distribución espacial con desviación estándar
+        - Calcular métricas de calidad estadística
         
         Args:
             sequence: The DNA sequence (str or Bio.Seq object)
             annotated_genes: Number of annotated genes for comparison
             
         Returns:
-            CodonAnalysisResult with all metrics
+            CodonAnalysisResult with all metrics including spatial distribution and quality
         """
         # Convert to Bio.Seq object if string
         if isinstance(sequence, str):
@@ -70,40 +185,82 @@ class CodonAnalyzer:
         # Count ATG (start codons) using BioPython's Seq.count()
         atg_count = self._count_codon_biopython(self.START_CODON)
         
+        # Encontrar posiciones de ATG para análisis espacial (como en los scripts)
+        self._atg_positions = self.find_codon_positions(self.START_CODON)
+        
         # Calculate ATG density (per kilobase)
         atg_density = round((atg_count / genome_length) * 1000, 3) if genome_length > 0 else 0
         
         # Count stop codons using BioPython
         stop_counts = {}
+        stop_positions_all = {}  # Almacenar posiciones de cada stop codon
         total_stops = 0
         
         for codon in self.STOP_CODONS:
             count = self._count_codon_biopython(codon)
+            positions = self.find_codon_positions(codon)
             stop_counts[codon] = count
+            stop_positions_all[codon] = positions
             total_stops += count
         
-        # Calculate percentages for stop codons
+        # Calculate percentages for stop codons (como en analyze_stop_codons.py)
         stop_codons_data = {}
         for codon, count in stop_counts.items():
-            percentage = round((count / total_stops) * 100, 1) if total_stops > 0 else 0
+            percentage = round((count / total_stops) * 100, 2) if total_stops > 0 else 0
+            density = round((count / genome_length) * 1000, 3) if genome_length > 0 else 0
+            
+            # Calcular distribución espacial para este stop codon
+            spatial_dist = self._analyze_spatial_distribution(
+                stop_positions_all[codon], 
+                genome_length,
+                num_windows=100
+            )
+            
             stop_codons_data[codon] = {
                 "count": count,
-                "percentage": percentage
+                "percentage": percentage,
+                "density_per_kb": density,
+                "spatial_distribution": spatial_dist,
+                "first_10_positions": stop_positions_all[codon][:10],
+                "last_10_positions": stop_positions_all[codon][-10:] if len(stop_positions_all[codon]) >= 10 else []
             }
         
-        # Gene comparison
+        # Gene comparison (más detallado)
+        ratio_atg_genes = round(atg_count / annotated_genes, 2) if annotated_genes > 0 else 0
+        non_coding_atg = atg_count - annotated_genes if annotated_genes > 0 else 0
+        
         gene_comparison = {
             "annotated_genes": annotated_genes,
             "atg_found": atg_count,
-            "difference": atg_count - annotated_genes
+            "difference": atg_count - annotated_genes,
+            "ratio_atg_to_genes": ratio_atg_genes,
+            "estimated_non_coding_atg": non_coding_atg,
+            "percent_non_coding": round((non_coding_atg / atg_count * 100), 2) if atg_count > 0 else 0
         }
+        
+        # Análisis de distribución espacial de ATG (como en analyze_atg.py)
+        spatial_distribution = self._analyze_spatial_distribution(
+            self._atg_positions,
+            genome_length,
+            num_windows=100
+        )
+        
+        # Métricas de calidad estadística
+        statistical_quality = self._calculate_statistical_quality(
+            atg_count,
+            total_stops,
+            genome_length,
+            annotated_genes
+        )
         
         result = CodonAnalysisResult(
             genome_length=genome_length,
             atg_count=atg_count,
             atg_density=atg_density,
             stop_codons=stop_codons_data,
-            gene_comparison=gene_comparison
+            gene_comparison=gene_comparison,
+            spatial_distribution=spatial_distribution,
+            statistical_quality=statistical_quality
         )
         
         self._last_result = result
@@ -267,14 +424,27 @@ class CodonAnalyzer:
         return codon_counts
     
     def to_dict(self) -> Dict:
-        """Convert last result to dictionary"""
+        """
+        Convert last result to dictionary with full statistical data.
+        Includes all metrics from analyze_atg.py and analyze_stop_codons.py
+        """
         if not self._last_result:
             return {}
         
-        return {
+        result = {
             "genome_length": self._last_result.genome_length,
             "atg_count": self._last_result.atg_count,
             "atg_density": self._last_result.atg_density,
             "stop_codons": self._last_result.stop_codons,
             "gene_comparison": self._last_result.gene_comparison
         }
+        
+        # Agregar distribución espacial si está disponible
+        if self._last_result.spatial_distribution:
+            result["spatial_distribution"] = self._last_result.spatial_distribution
+        
+        # Agregar calidad estadística si está disponible
+        if self._last_result.statistical_quality:
+            result["statistical_quality"] = self._last_result.statistical_quality
+        
+        return result

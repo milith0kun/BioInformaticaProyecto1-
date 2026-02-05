@@ -50,7 +50,7 @@ const colorClasses = {
   slate: 'bg-slate-600',
 }
 
-export default function DataExport({ hasData }) {
+export default function DataExport({ hasData, comparisonData, currentGenome, selectedGenomes }) {
   const [isExporting, setIsExporting] = useState({})
 
   const handleExport = async (option) => {
@@ -78,7 +78,11 @@ export default function DataExport({ hasData }) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Exportar Datos</h2>
-          <p className="text-slate-500 text-sm">Descargue los resultados del análisis</p>
+          <p className="text-slate-500 text-sm">
+            {selectedGenomes && selectedGenomes.length > 1 
+              ? `Análisis detallado: ${currentGenome?.accession || 'genoma activo'} • Comparación: ${selectedGenomes.length} genomas`
+              : 'Descargue los resultados del análisis'}
+          </p>
         </div>
         {!hasData && (
           <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">

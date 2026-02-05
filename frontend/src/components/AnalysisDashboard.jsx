@@ -142,6 +142,35 @@ export default function AnalysisDashboard({ analysisData, isLoading, status }) {
         </div>
       </div>
 
+      {/* Spatial Statistics */}
+      {codons.spatial_distribution && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+          <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">📊 Estadísticas de Distribución Espacial ATG</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Desviación Estándar</p>
+              <p className="text-2xl font-bold text-blue-700">{codons.spatial_distribution.std_dev.toFixed(3)}</p>
+              <p className="text-xs text-slate-500 mt-1">±σ margen de error</p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Coef. Variación</p>
+              <p className="text-2xl font-bold text-purple-700">{codons.spatial_distribution.coefficient_of_variation.toFixed(1)}%</p>
+              <p className="text-xs text-slate-500 mt-1">dispersión relativa</p>
+            </div>
+            <div className="bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Score Uniformidad</p>
+              <p className="text-2xl font-bold text-emerald-700">{codons.spatial_distribution.uniformity_score.toFixed(1)}/100</p>
+              <p className="text-xs text-slate-500 mt-1">100 = perfecto</p>
+            </div>
+            <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl border border-amber-100 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Rango</p>
+              <p className="text-2xl font-bold text-amber-700">{codons.spatial_distribution.range_positions}</p>
+              <p className="text-xs text-slate-500 mt-1">ventanas analizadas</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stop Codons */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
         <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">Distribución de Codones de Parada</h3>
@@ -152,6 +181,16 @@ export default function AnalysisDashboard({ analysisData, isLoading, status }) {
                 {codon}
               </span>
               <p className="text-xl sm:text-2xl font-bold text-teal-700">{formatNumber(data.count)}</p>
+              {data.spatial_distribution && (
+                <div className="mt-2 text-left space-y-1">
+                  <p className="text-xs text-slate-600">
+                    σ espacial: <span className="font-semibold text-blue-700">{data.spatial_distribution.std_dev.toFixed(2)}</span>
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    CV: <span className="font-semibold text-purple-700">{data.spatial_distribution.coefficient_of_variation.toFixed(1)}%</span>
+                  </p>
+                </div>
+              )}
               <div className="mt-3 bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
@@ -163,6 +202,35 @@ export default function AnalysisDashboard({ analysisData, isLoading, status }) {
           ))}
         </div>
       </div>
+
+      {/* Statistical Quality Metrics */}
+      {codons.statistical_quality && (
+        <div className="bg-gradient-to-br from-indigo-50 to-white rounded-xl border border-indigo-200 p-4 sm:p-6">
+          <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">🎯 Calidad Estadística del Análisis</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Ratio ATG/Stop</p>
+              <p className="text-xl sm:text-2xl font-bold text-indigo-700">{codons.statistical_quality.atg_stop_ratio.toFixed(3)}</p>
+              <p className="text-xs text-slate-500 mt-1">balance codones</p>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Precisión Genes</p>
+              <p className="text-xl sm:text-2xl font-bold text-teal-700">{codons.statistical_quality.gene_count_accuracy.toFixed(1)}%</p>
+              <p className="text-xs text-slate-500 mt-1">ATG vs genes CDS</p>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Score Calidad</p>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-700">{codons.statistical_quality.quality_score.toFixed(1)}/100</p>
+              <p className="text-xs text-slate-500 mt-1">confiabilidad</p>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">No Codificantes</p>
+              <p className="text-xl sm:text-2xl font-bold text-purple-700">{codons.statistical_quality.non_coding_atg_estimated}</p>
+              <p className="text-xs text-slate-500 mt-1">ATG extras</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Validation Results */}
       {validation && (

@@ -14,19 +14,75 @@ router = APIRouter()
 @router.get("/detect", response_model=FileListResponse)
 async def detect_files(request: Request):
     """
-    Detect and list all available genomic files
+    Detect and list all available genomic files from ALL downloaded genomes
     """
     file_detector = request.app.state.file_detector
+    project_root = file_detector.project_root
     
-    if not file_detector.detected_files:
-        # Try to scan ncbi_dataset folder
-        project_root = file_detector.project_root
-        ncbi_folder = os.path.join(project_root, "ncbi_dataset")
-        
-        if os.path.exists(ncbi_folder):
-            file_detector.scan_directory(ncbi_folder)
+    # Buscar en la carpeta genomes/ todos los genomas descargados
+    genomes_path = os.path.join(project_root, "genomes")
+    all_files = []
     
-    summary = file_detector.get_files_summary()
+    if os.path.exists(genomes_path):
+        for accession_dir in os.listdir(genomes_path):
+            if not (accession_dir.startswith("GCF_") or accession_dir.startswith("GCA_")):
+                continue
+            
+            # Buscar archivos en extracted/ncbi_dataset/data/
+            extracted_path = os.path.join(
+                genomes_path, 
+                accession_dir, 
+                "extracted", 
+                "ncbi_dataset", 
+                "data",
+                accession_dir
+            )
+            
+            if os.path.exists(extracted_path):
+                for filename in os.listdir(extracted_path):
+                    filepath = os.path.join(extracted_path, filename)
+                    if os.path.isfile(filepath):
+                        file_size = os.path.getsize(filepath)
+                        extension = os.path.splitext(filename)[1]
+                        
+                        # Determinar tipo de archivo
+                        file_type = "Unknown"
+                        if extension == ".gbff":
+                            file_type = "GenBank Full Flat File"
+                        elif extension == ".fna":
+                            file_type = "FASTA Nucleotide"
+                        elif extension == ".gff":
+                            file_type = "GFF3 Annotation"
+                        elif extension == ".gtf":
+                            file_type = "GTF Annotation"
+                        elif extension == ".faa":
+                            file_type = "FASTA Protein"
+                        elif extension == ".jsonl":
+                            file_type = "JSON Lines Report"
+                        elif extension == ".txt":
+                            file_type = "Text File"
+                        
+                        all_files.append({
+                            "filename": filename,
+                            "filepath": filepath,
+                            "extension": extension,
+                            "size_bytes": file_size,
+                            "size_mb": round(file_size / (1024 * 1024), 2),
+                            "file_type": file_type,
+                            "is_primary": extension == ".gbff",
+                            "accession": accession_dir
+                        })
+    
+    # También buscar en ncbi_dataset/ (carpeta antigua)
+    ncbi_folder = os.path.join(project_root, "ncbi_dataset")
+    if os.path.exists(ncbi_folder) and not file_detector.detected_files:
+        file_detector.scan_directory(ncbi_folder)
+        summary = file_detector.get_files_summary()
+        for f in summary["files"]:
+            all_files.append({
+                **f,
+                "accession": "ncbi_dataset"
+            })
     
     files = [
         FileInfo(
@@ -35,15 +91,17 @@ async def detect_files(request: Request):
             extension=f["extension"],
             size_bytes=f["size_bytes"],
             file_type=f["file_type"],
-            is_primary=f["is_primary"]
+            is_primary=f.get("is_primary", False)
         )
-        for f in summary["files"]
+        for f in all_files
     ]
+    
+    primary_file = next((f["filepath"] for f in all_files if f.get("is_primary")), None)
     
     return FileListResponse(
         files=files,
-        total_count=summary["total_count"],
-        primary_file=summary["primary_file"]
+        total_count=len(all_files),
+        primary_file=primary_file
     )
 
 

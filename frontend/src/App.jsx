@@ -9,6 +9,9 @@ import AIValidation from './components/AIValidation'
 import GenomeSelector from './components/GenomeSelector'
 import GenomeComparison from './components/GenomeComparison'
 import GeneFilter from './components/GeneFilter'
+import MultiGenomeAnalyzer from './components/MultiGenomeAnalyzer'
+import GenomeMultiSelector from './components/GenomeMultiSelector'
+import ComparisonResults from './components/ComparisonResults'
 import { api } from './services/api'
 
 function App() {
@@ -21,6 +24,8 @@ function App() {
   const [isValidatingAI, setIsValidatingAI] = useState(false)
   const [currentGenome, setCurrentGenome] = useState(null)
   const [downloadedGenomes, setDownloadedGenomes] = useState([])
+  const [selectedGenomes, setSelectedGenomes] = useState([]) // Múltiples genomas seleccionados
+  const [comparisonResult, setComparisonResult] = useState(null) // Resultado de comparación
 
   // Vista activa para resultados (después del paso 3)
   const [activeView, setActiveView] = useState('dashboard')
@@ -55,30 +60,134 @@ function App() {
 
   const handleGenomeActivated = (result) => {
     setCurrentGenome(result.genome_info)
+    setSelectedGenomes([result.genome_info.accession])
     loadFiles()
     setAnalysisData(null)
     setAiValidation(null)
+    setComparisonResult(null)
     setCurrentStep(3) // Avanzar al paso de análisis
     toast.success(`Genoma ${result.genome_info.accession} seleccionado`)
   }
 
+  // Manejar selección múltiple
+  const handleMultipleSelection = (accessions) => {
+    setSelectedGenomes(accessions)
+    // Si hay al menos 1, tomar el primero como "actual" para compatibilidad
+    if (accessions.length > 0) {
+      const genome = downloadedGenomes.find(g => g.accession === accessions[0])
+      if (genome) {
+        setCurrentGenome(genome)
+      }
+    }
+  }
+
+  // Ejecutar análisis (1 o más genomas)
   const runAnalysis = async () => {
-    if (!currentGenome) {
-      toast.error('Seleccione un genoma primero')
+    if (selectedGenomes.length === 0) {
+      toast.error('Seleccione al menos un genoma')
       return
     }
 
     setIsLoading(true)
+    const failedGenomes = []
+    const successfulGenomes = []
+    
     try {
-      toast.loading('Ejecutando análisis genómico...', { id: 'analysis' })
-      const result = await api.runCompleteAnalysis()
-      setAnalysisData(result)
-      setCurrentStep(4) // Avanzar a resultados
-      setActiveView('dashboard')
-      toast.success('Análisis completado', { id: 'analysis' })
+      // Flujo unificado: descargar genomas y comparar (funciona para 1 o más genomas)
+      toast.loading(`Descargando ${selectedGenomes.length} genoma${selectedGenomes.length > 1 ? 's' : ''}...`, { id: 'analysis' })
+      
+      // Descargar todos los genomas seleccionados
+      for (let i = 0; i < selectedGenomes.length; i++) {
+        const accession = selectedGenomes[i]
+        
+        // Verificar si ya está descargado
+        const isAlreadyDownloaded = downloadedGenomes.some(g => g.accession === accession)
+        
+        if (isAlreadyDownloaded) {
+          toast.loading(`Genoma ${i + 1}/${selectedGenomes.length} ya descargado ✓`, { id: 'analysis', duration: 1000 })
+          successfulGenomes.push(accession)
+          continue // Saltar al siguiente
+        }
+        
+        toast.loading(`Descargando genoma ${i + 1}/${selectedGenomes.length}: ${accession}...`, { id: 'analysis' })
+        
+        try {
+          // Iniciar descarga
+          await api.downloadGenome({
+            accession: accession,
+            include_gbff: true,
+            include_gff: true,
+            include_fasta: true
+          })
+          
+          // Esperar a que la descarga termine
+          let downloadComplete = false
+          let attempts = 0
+          const maxAttempts = 60 // 60 segundos máximo por genoma
+          
+          while (!downloadComplete && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
+            const status = await api.getGenomeDownloadStatus(accession)
+            if (status.status === 'completed') {
+              downloadComplete = true
+              successfulGenomes.push(accession)
+              toast.loading(`Genoma ${i + 1}/${selectedGenomes.length} descargado ✓`, { id: 'analysis' })
+            } else if (status.status === 'error') {
+              throw new Error(status.message || 'Error en descarga')
+            }
+            attempts++
+          }
+          
+          if (!downloadComplete) {
+            throw new Error(`Timeout descargando ${accession}`)
+          }
+        } catch (downloadError) {
+          console.warn(`Error descargando ${accession}:`, downloadError)
+          failedGenomes.push({ accession, error: downloadError.message })
+          toast.error(`${accession} falló: ${downloadError.message.substring(0, 50)}...`, { duration: 4000 })
+        }
+      }
+      
+      toast.loading('Ejecutando análisis comparativo...', { id: 'analysis' })
+      
+      // Esperar 2 segundos adicionales para asegurar que los archivos estén listos
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Comparar solo los genomas exitosos
+      const comparison = await api.compareGenomes(successfulGenomes)
+      setComparisonResult(comparison)
+      
+      // Siempre activar el último genoma exitoso para análisis detallado (Dashboard, Codones, Genes, etc.)
+      toast.loading('Obteniendo análisis detallado con codones...', { id: 'analysis' })
+      try {
+        const lastGenome = successfulGenomes[successfulGenomes.length - 1]
+        await api.activateGenome(lastGenome)
+        await loadFiles()
+        const detailedAnalysis = await api.runCompleteAnalysis()
+        setAnalysisData(detailedAnalysis)
+      } catch (detailError) {
+        console.warn('No se pudo obtener análisis detallado:', detailError)
+        setAnalysisData(null)
+      }
+      
+      setCurrentStep(3)
+      setActiveView('comparison')
+      
+      // Actualizar lista de genomas descargados
+      await loadDownloadedGenomes()
+      
+      // Mensaje final con resumen
+      if (failedGenomes.length > 0) {
+        toast.success(
+          `✓ ${successfulGenomes.length} genoma${successfulGenomes.length > 1 ? 's' : ''} • ✗ ${failedGenomes.length} falló${failedGenomes.length > 1 ? 'fallaron' : ''}`, 
+          { id: 'analysis', duration: 5000 }
+        )
+      } else {
+        toast.success(`${successfulGenomes.length} genoma${successfulGenomes.length > 1 ? 's' : ''} analizado${successfulGenomes.length > 1 ? 's' : ''}`, { id: 'analysis' })
+      }
     } catch (error) {
       console.error('Analysis error:', error)
-      toast.error('Error en el análisis', { id: 'analysis' })
+      toast.error('Error en el análisis: ' + (error.response?.data?.detail || error.message), { id: 'analysis' })
     } finally {
       setIsLoading(false)
     }
@@ -107,18 +216,17 @@ function App() {
 
   // Definir los pasos del workflow
   const steps = [
-    { id: 1, name: 'Buscar Genoma', description: 'Buscar en NCBI' },
-    { id: 2, name: 'Seleccionar', description: 'Elegir genoma' },
-    { id: 3, name: 'Analizar', description: 'Ejecutar análisis' },
-    { id: 4, name: 'Resultados', description: 'Ver datos' },
+    { id: 1, name: 'Seleccionar', description: 'Elegir genomas' },
+    { id: 2, name: 'Analizar', description: 'Procesar datos' },
+    { id: 3, name: 'Resultados', description: 'Ver análisis' },
   ]
 
   const resultViews = [
     { id: 'dashboard', name: 'Dashboard' },
+    { id: 'comparison', name: '📊 Comparación' },
     { id: 'codons', name: 'Codones' },
     { id: 'genes', name: 'Genes' },
     { id: 'filter', name: 'Filtrar Genes' },
-    { id: 'compare', name: 'Comparar' },
     { id: 'files', name: 'Archivos' },
     { id: 'ai', name: 'Validación IA' },
     { id: 'export', name: 'Exportar' },
@@ -204,188 +312,123 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
 
-        {/* PASO 1: Buscar Genoma */}
+        {/* PASO 1: Seleccionar Múltiples Genomas */}
         {currentStep === 1 && (
           <div className="space-y-6">
             <div className="text-center mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 px-4">Buscar Genoma en NCBI</h2>
-              <p className="text-sm sm:text-base text-slate-500 mt-1 px-4">Escribe el nombre del organismo o número de accesión</p>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 px-4">Seleccionar Genomas para Análisis</h2>
+              <p className="text-sm sm:text-base text-slate-500 mt-1 px-4">
+                Selecciona uno o más genomas para analizar (se descargarán automáticamente)
+              </p>
             </div>
 
-            <GenomeSelector
-              onGenomeActivated={handleGenomeActivated}
-              onGenomeDownloaded={handleGenomeDownloaded}
-              mode="search"
+            <GenomeMultiSelector
+              downloadedGenomes={downloadedGenomes}
+              selectedGenomes={selectedGenomes}
+              onSelectionChange={handleMultipleSelection}
+              onRefresh={loadDownloadedGenomes}
             />
 
-            {/* Quick Access to Downloaded */}
-            {downloadedGenomes.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 mt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-slate-800">Genomas Descargados</h3>
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="text-sm text-teal-600 hover:text-teal-700 font-medium"
-                  >
-                    Ver todos →
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {downloadedGenomes.slice(0, 5).map(genome => (
-                    <button
-                      key={genome.accession}
-                      onClick={() => handleGenomeActivated({ genome_info: genome })}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-teal-100 text-slate-700 hover:text-teal-700 rounded-lg text-sm font-mono transition-all"
-                    >
-                      {genome.accession}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* PASO 2: Seleccionar Genoma */}
-        {currentStep === 2 && (
-          <div className="space-y-6">
-            <div className="text-center mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 px-4">Seleccionar Genoma</h2>
-              <p className="text-sm sm:text-base text-slate-500 mt-1 px-4">Elige el genoma que deseas analizar</p>
-            </div>
-
-            {downloadedGenomes.length === 0 ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-                <div className="w-16 h-16 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                </div>
-                <h3 className="font-semibold text-slate-700 mb-2">No hay genomas descargados</h3>
-                <p className="text-slate-500 text-sm mb-4">Primero busca y descarga un genoma</p>
-                <button
-                  onClick={() => setCurrentStep(1)}
-                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-medium"
-                >
-                  Ir a buscar
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {downloadedGenomes.map(genome => (
-                  <div
-                    key={genome.accession}
-                    className={`bg-white rounded-xl border p-5 transition-all cursor-pointer hover:shadow-md ${currentGenome?.accession === genome.accession
-                        ? 'border-teal-500 ring-2 ring-teal-100'
-                        : 'border-slate-200 hover:border-teal-300'
-                      }`}
-                    onClick={() => handleGenomeActivated({ genome_info: genome })}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <span className="font-mono text-teal-700 font-semibold bg-teal-50 px-2 py-1 rounded">
-                        {genome.accession}
-                      </span>
-                      {currentGenome?.accession === genome.accession && (
-                        <span className="w-6 h-6 bg-teal-500 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-600">{genome.file_count} archivos</p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleGenomeActivated({ genome_info: genome })
-                      }}
-                      className="mt-3 w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium transition-all"
-                    >
-                      Seleccionar y Continuar
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-between pt-4">
+            {/* Botón de continuar */}
+            <div className="flex justify-end items-center pt-4 bg-white rounded-xl border border-slate-200 p-4">
               <button
-                onClick={() => setCurrentStep(1)}
-                className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm"
+                onClick={() => {
+                  if (selectedGenomes.length === 0) {
+                    toast.error('Selecciona al menos un genoma')
+                    return
+                  }
+                  setCurrentStep(2)
+                }}
+                disabled={selectedGenomes.length === 0}
+                className="px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 transition-all"
               >
-                ← Buscar más genomas
+                Continuar con {selectedGenomes.length} genoma{selectedGenomes.length !== 1 ? 's' : ''} →
               </button>
             </div>
           </div>
         )}
 
-        {/* PASO 3: Ejecutar Análisis */}
-        {currentStep === 3 && (
+        {/* PASO 2: Descargar y Analizar */}
+        {currentStep === 2 && (
           <div className="space-y-6">
             <div className="text-center mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 px-4">Ejecutar Análisis</h2>
-              <p className="text-sm sm:text-base text-slate-500 mt-1 px-4">Analiza el genoma seleccionado</p>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 px-4">Preparar Análisis</h2>
+              <p className="text-sm sm:text-base text-slate-500 mt-1 px-4">
+                {selectedGenomes.length === 1 
+                  ? 'Analiza el genoma seleccionado' 
+                  : `Análisis comparativo de ${selectedGenomes.length} genomas`}
+              </p>
             </div>
 
-            {/* Genome Info Card */}
-            {currentGenome ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 max-w-2xl mx-auto">
+            {/* Resumen de genomas seleccionados */}
+            {selectedGenomes.length > 0 ? (
+              <div className="bg-white rounded-xl border border-slate-200 p-6 max-w-3xl mx-auto">
                 <div className="text-center mb-6">
-                  <div className="inline-block bg-teal-50 px-4 py-2 rounded-lg mb-2">
-                    <span className="font-mono text-xl text-teal-700 font-bold">{currentGenome.accession}</span>
+                  <div className="inline-flex items-center gap-2 bg-teal-50 px-4 py-2 rounded-lg mb-2">
+                    <span className="text-2xl">🧬</span>
+                    <span className="font-bold text-teal-700">
+                      {selectedGenomes.length} genoma{selectedGenomes.length !== 1 ? 's' : ''} seleccionado{selectedGenomes.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-800">{currentGenome.organism_name || 'Genoma seleccionado'}</h3>
-                  {currentGenome.strain && (
-                    <p className="text-slate-500 text-sm">Strain: {currentGenome.strain}</p>
-                  )}
+                  <p className="text-slate-600 text-sm">
+                    {selectedGenomes.length === 1 
+                      ? 'Análisis completo de un genoma' 
+                      : 'Análisis comparativo mostrará diferencias y similitudes'}
+                  </p>
                 </div>
 
-                {/* Stats Preview */}
-                {currentGenome.genome_size_mb && (
-                  <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="text-center p-3 bg-slate-50 rounded-lg">
-                      <div className="text-lg font-bold text-teal-700">{currentGenome.genome_size_mb} Mb</div>
-                      <div className="text-xs text-slate-500">Tamaño</div>
-                    </div>
-                    <div className="text-center p-3 bg-slate-50 rounded-lg">
-                      <div className="text-lg font-bold text-emerald-700">{currentGenome.gc_percent?.toFixed(1)}%</div>
-                      <div className="text-xs text-slate-500">GC</div>
-                    </div>
-                    <div className="text-center p-3 bg-slate-50 rounded-lg">
-                      <div className="text-lg font-bold text-slate-700">{currentGenome.gene_count?.toLocaleString() || 'N/A'}</div>
-                      <div className="text-xs text-slate-500">Genes</div>
-                    </div>
-                  </div>
-                )}
+                {/* Lista de genomas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                  {selectedGenomes.map((accession, i) => {
+                    const genome = downloadedGenomes.find(g => g.accession === accession)
+                    return (
+                      <div key={accession} className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                        <span className="w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-mono text-sm text-teal-700 truncate">{accession}</div>
+                          {genome?.organism_name && (
+                            <div className="text-xs text-slate-500 truncate">{genome.organism_name}</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
 
-                {/* Action Button */}
+                {/* Botón de análisis */}
                 <button
                   onClick={runAnalysis}
                   disabled={isLoading}
-                  className="w-full py-3 sm:py-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:from-slate-400 disabled:to-slate-500 text-white rounded-xl font-semibold text-base sm:text-lg transition-all shadow-lg flex items-center justify-center gap-2 sm:gap-3"
+                  className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-lg font-bold rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-3"
                 >
                   {isLoading ? (
                     <>
-                      <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Analizando...
+                      <span>Analizando...</span>
                     </>
                   ) : (
                     <>
-                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                       </svg>
-                      <span className="hidden sm:inline">Ejecutar Análisis Completo</span>
-                      <span className="sm:hidden">Ejecutar Análisis</span>
+                      <span>
+                        {selectedGenomes.length === 1 
+                          ? 'Ejecutar Análisis Completo' 
+                          : 'Ejecutar Análisis Comparativo'}
+                      </span>
                     </>
                   )}
                 </button>
 
-                <p className="text-center text-xs sm:text-sm text-slate-500 mt-3 px-2">
-                  Se analizarán codones, genes y se validará contra valores de referencia
+                <p className="text-center text-xs text-slate-500 mt-3">
+                  {selectedGenomes.length === 1 
+                    ? 'Análisis de codones, genes, estadísticas y validación con IA' 
+                    : 'Comparación de tamaño, genes, GC%, densidad génica y genes extremos'}
                 </p>
               </div>
             ) : (
@@ -395,10 +438,10 @@ function App() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
-                <h3 className="font-semibold text-slate-700 mb-2">No hay genoma seleccionado</h3>
+                <h3 className="font-semibold text-slate-700 mb-2">No hay genomas seleccionados</h3>
                 <p className="text-slate-500 text-sm mb-4">Selecciona un genoma para analizar</p>
                 <button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => setCurrentStep(1)}
                   className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-medium"
                 >
                   Seleccionar genoma
@@ -408,7 +451,7 @@ function App() {
 
             <div className="flex justify-between pt-4 max-w-2xl mx-auto">
               <button
-                onClick={() => setCurrentStep(2)}
+                onClick={() => setCurrentStep(1)}
                 className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm"
               >
                 ← Cambiar genoma
@@ -417,8 +460,8 @@ function App() {
           </div>
         )}
 
-        {/* PASO 4: Resultados */}
-        {currentStep === 4 && (
+        {/* PASO 3: Resultados */}
+        {currentStep === 3 && (
           <div className="space-y-4 sm:space-y-6">
             {/* Tabs de resultados */}
             <div className="bg-white border border-slate-200 p-2 rounded-xl">
@@ -465,13 +508,21 @@ function App() {
             {/* Genome Info Bar */}
             {currentGenome && (
               <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                  <span className="w-2 h-2 flex-shrink-0 bg-emerald-500 rounded-full"></span>
-                  <span className="font-mono font-semibold text-teal-700 text-sm sm:text-base">{currentGenome.accession}</span>
-                  <span className="text-slate-600 text-xs sm:text-sm truncate">{currentGenome.organism_name}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-1">
+                    <span className="w-2 h-2 flex-shrink-0 bg-emerald-500 rounded-full"></span>
+                    <span className="font-mono font-semibold text-teal-700 text-sm sm:text-base">{currentGenome.accession}</span>
+                    <span className="text-slate-600 text-xs sm:text-sm truncate">{currentGenome.organism_name}</span>
+                  </div>
+                  {selectedGenomes.length > 1 && (
+                    <p className="text-xs text-slate-500 ml-4">
+                      📊 Comparación: {selectedGenomes.length} genomas • 
+                      Dashboard/Codones/Genes/IA: análisis detallado de este genoma
+                    </p>
+                  )}
                 </div>
                 <button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => setCurrentStep(1)}
                   className="text-xs sm:text-sm text-teal-600 hover:text-teal-700 font-medium whitespace-nowrap"
                 >
                   Cambiar genoma
@@ -491,20 +542,24 @@ function App() {
               {activeView === 'codons' && (
                 <CodonVisualization codonData={analysisData?.codons} />
               )}
+              {activeView === 'comparison' && (
+                <ComparisonResults 
+                  comparisonResult={comparisonResult} 
+                  selectedGenomes={selectedGenomes}
+                />
+              )}
               {activeView === 'genes' && (
                 <GeneStatistics geneData={analysisData?.genes} />
               )}
               {activeView === 'filter' && (
                 <GeneFilter hasAnalysis={!!analysisData} />
               )}
-              {activeView === 'compare' && (
-                <GenomeComparison 
-                  hasAnalysis={!!analysisData} 
-                  downloadedGenomes={downloadedGenomes}
-                />
-              )}
               {activeView === 'files' && (
-                <FileManager files={files} onRefresh={loadFiles} />
+                <FileManager 
+                  files={files} 
+                  onRefresh={loadFiles}
+                  selectedGenomes={selectedGenomes}
+                />
               )}
               {activeView === 'ai' && (
                 <AIValidation
@@ -512,17 +567,24 @@ function App() {
                   isValidating={isValidatingAI}
                   onValidate={runAIValidation}
                   hasAnalysis={!!analysisData}
+                  comparisonData={comparisonResult}
+                  selectedGenomes={selectedGenomes}
                 />
               )}
               {activeView === 'export' && (
-                <DataExport hasData={analysisData !== null} />
+                <DataExport 
+                  hasData={analysisData !== null} 
+                  comparisonData={comparisonResult}
+                  currentGenome={currentGenome}
+                  selectedGenomes={selectedGenomes}
+                />
               )}
             </div>
 
             <div className="flex justify-between pt-4">
               <button
                 onClick={() => {
-                  setCurrentStep(3)
+                  setCurrentStep(2)
                   setAnalysisData(null)
                   setAiValidation(null)
                 }}

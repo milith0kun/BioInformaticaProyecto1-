@@ -7,6 +7,7 @@ import zipfile
 import requests
 import json
 import shutil
+import time
 from typing import Dict, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -171,49 +172,76 @@ class NCBIDownloader:
             except (ValueError, TypeError):
                 return default
         
-        # Try to search by taxon name first
-        url = f"{self.BASE_URL}/genome/taxon/{query}/dataset_report"
-        params = {
-            "page_size": limit,
-            "filters.reference_only": "false"
-        }
+        # If query is very short, try common organisms
+        search_queries = [query]
         
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
+        # Add common expansions for short queries
+        if len(query) <= 10:
+            common_expansions = {
+                "coli": ["Escherichia coli", "562"],  # 562 is E. coli tax ID
+                "salmonella": ["Salmonella enterica", "28901"],
+                "bacillus": ["Bacillus subtilis", "1423"],
+                "staph": ["Staphylococcus aureus", "1280"],
+                "pseudo": ["Pseudomonas aeruginosa", "287"],
+                "tuberculosis": ["Mycobacterium tuberculosis", "1773"],
+                "strepto": ["Streptococcus pneumoniae", "1313"],
+            }
             
-            results = []
-            for report in data.get("reports", [])[:limit]:
-                assembly_info = report.get("assembly_info", {})
-                organism = report.get("organism", {})
-                assembly_stats = report.get("assembly_stats", {})
-                
-                # Safe extraction of strain
-                infraspecific = organism.get("infraspecific_names")
-                strain = ""
-                if isinstance(infraspecific, dict):
-                    strain = infraspecific.get("strain", "")
-                
-                genome_size = safe_int(assembly_stats.get("total_sequence_length"))
-                genome_size_mb = round(genome_size / 1_000_000, 2) if genome_size > 0 else 0
-                
-                results.append({
-                    "accession": report.get("accession", ""),
-                    "organism_name": organism.get("organism_name", "Unknown"),
-                    "strain": strain,
-                    "assembly_name": assembly_info.get("assembly_name", ""),
-                    "assembly_level": assembly_info.get("assembly_level", ""),
-                    "genome_size_mb": genome_size_mb,
-                    "is_reference": assembly_info.get("refseq_category", "") == "reference genome",
-                    "submission_date": assembly_info.get("submission_date", "")
-                })
+            query_lower = query.lower()
+            for key, expansions in common_expansions.items():
+                if key in query_lower:
+                    search_queries.extend(expansions)
+                    break
+        
+        # Try each query until we get results
+        all_results = []
+        for search_query in search_queries:
+            # Try to search by taxon name or ID
+            url = f"{self.BASE_URL}/genome/taxon/{search_query}/dataset_report"
+            params = {
+                "page_size": limit,
+                "filters.reference_only": "false"
+            }
             
-            return results
-            
-        except requests.exceptions.RequestException as e:
-            print(f"Error searching genomes: {e}")
-            return []
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                
+                for report in data.get("reports", [])[:limit]:
+                    assembly_info = report.get("assembly_info", {})
+                    organism = report.get("organism", {})
+                    assembly_stats = report.get("assembly_stats", {})
+                    
+                    # Safe extraction of strain
+                    infraspecific = organism.get("infraspecific_names")
+                    strain = ""
+                    if isinstance(infraspecific, dict):
+                        strain = infraspecific.get("strain", "")
+                    
+                    genome_size = safe_int(assembly_stats.get("total_sequence_length"))
+                    genome_size_mb = round(genome_size / 1_000_000, 2) if genome_size > 0 else 0
+                    
+                    all_results.append({
+                        "accession": report.get("accession", ""),
+                        "organism_name": organism.get("organism_name", "Unknown"),
+                        "strain": strain,
+                        "assembly_name": assembly_info.get("assembly_name", ""),
+                        "assembly_level": assembly_info.get("assembly_level", ""),
+                        "genome_size_mb": genome_size_mb,
+                        "is_reference": assembly_info.get("refseq_category", "") == "reference genome",
+                        "submission_date": assembly_info.get("submission_date", "")
+                    })
+                
+                # If we got results, stop trying other queries
+                if all_results:
+                    break
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"Error searching genomes with query '{search_query}': {e}")
+                continue
+        
+        return all_results[:limit]
     
     def download_genome(
         self, 
@@ -273,27 +301,67 @@ class NCBIDownloader:
         
         zip_path = os.path.join(genome_dir, f"{accession}_dataset.zip")
         
+        # Intentar hasta 3 veces si hay errores
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    if callback:
+                        callback("downloading", f"Reintentando descarga (intento {attempt + 1}/{max_retries})...")
+                    # Limpiar archivo corrupto si existe
+                    if os.path.exists(zip_path):
+                        os.remove(zip_path)
+                
+                if callback:
+                    callback("downloading", f"Descargando {accession} desde NCBI...")
+                
+                # Download the ZIP file
+                response = self.session.get(url, params=params, stream=True, timeout=300)
+                response.raise_for_status()
+                
+                # Verificar que la respuesta es un ZIP válido
+                content_type = response.headers.get('content-type', '')
+                if 'html' in content_type.lower() or 'text' in content_type.lower():
+                    raise Exception(f"NCBI devolvió {content_type} en lugar de un archivo ZIP. Posible error de API o accession inválido.")
+                
+                # Get total size if available
+                total_size = int(response.headers.get('content-length', 0))
+                
+                # Verificar tamaño mínimo (un ZIP válido tiene al menos algunos KB)
+                if total_size > 0 and total_size < 1000:
+                    raise Exception(f"Archivo muy pequeño ({total_size} bytes). Probablemente no sea un genoma válido.")
+                
+                downloaded = 0
+                
+                with open(zip_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if callback and total_size > 0:
+                                progress = (downloaded / total_size) * 100
+                                callback("downloading", f"Descargando... {progress:.1f}%")
+                
+                # Verificar que el archivo descargado es un ZIP válido
+                if not zipfile.is_zipfile(zip_path):
+                    file_size = os.path.getsize(zip_path)
+                    raise Exception(f"El archivo descargado ({file_size} bytes) no es un ZIP válido. Reintentando...")
+                
+                # Si llegamos aquí, la descarga fue exitosa
+                break
+                
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    print(f"⚠️ Error en descarga de {accession} (intento {attempt + 1}): {str(e)}")
+                    time.sleep(2)  # Esperar 2 segundos antes de reintentar
+                else:
+                    # Último intento falló
+                    raise Exception(f"No se pudo descargar {accession} después de {max_retries} intentos. Error: {str(last_error)}")
+        
         try:
-            if callback:
-                callback("downloading", f"Descargando {accession} desde NCBI...")
-            
-            # Download the ZIP file
-            response = self.session.get(url, params=params, stream=True, timeout=300)
-            response.raise_for_status()
-            
-            # Get total size if available
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
-            
-            with open(zip_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if callback and total_size > 0:
-                            progress = (downloaded / total_size) * 100
-                            callback("downloading", f"Descargando... {progress:.1f}%")
-            
             if callback:
                 callback("extracting", "Extrayendo archivos...")
             

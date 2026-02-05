@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     
     # Get project root (two levels up from app/)
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    app.state.project_root = project_root
     
     # Initialize file detector
     app.state.file_detector = FileDetector(project_root)

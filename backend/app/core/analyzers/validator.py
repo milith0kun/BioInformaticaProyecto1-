@@ -1,24 +1,12 @@
 """
-Validator Module
-Validates analysis results against E. coli K-12 MG1655 reference values
-
-Módulos BioPython utilizados (opcional):
-- Bio.Entrez: Validación de metadata del genoma contra NCBI
-- Verificación de que el organismo es correcto
-- Obtención de información actualizada de referencia
-
-Implementa el algoritmo de validación 7.3:
-- Comparar valores calculados con constantes de referencia
-- Calcular: desviación = abs(calculado - referencia) / referencia * 100
-- Clasificar: PASS (<5%), WARNING (5-10%), FAIL (>10%)
-
-Valores de referencia: NCBI RefSeq NC_000913.3
+Validator Module - Dynamic Validation System
+Validates analysis results dynamically against calculated averages
 """
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+import numpy as np
 
-# Bio.Entrez para validación opcional contra NCBI
 try:
     from Bio import Entrez
     ENTREZ_AVAILABLE = True
@@ -45,94 +33,108 @@ class ValidationItem:
 class ValidationResult:
     items: List[ValidationItem]
     overall_status: ValidationStatus
+    validation_type: str = "dynamic"
+    reference_source: str = ""
 
 
-# Reference values for E. coli K-12 MG1655
-# Source: NCBI Reference Sequence NC_000913.3
-REFERENCE_VALUES = {
-    "total_genes": {
-        "value": 4300,
-        "description": "Total number of annotated genes",
-        "tolerance": 5  # percent
-    },
-    "genome_length": {
-        "value": 4641652,
-        "description": "Total genome length in base pairs",
-        "tolerance": 1  # percent
-    },
-    "gc_content": {
-        "value": 50.79,
-        "description": "GC content percentage",
-        "tolerance": 2  # percent
-    },
-    "total_cds": {
-        "value": 4140,
-        "description": "Number of coding sequences",
-        "tolerance": 5  # percent
-    },
-    "gene_density": {
-        "value": 926,
-        "description": "Genes per megabase",
-        "tolerance": 10  # percent
-    }
+DYNAMIC_TOLERANCES = {
+    "total_genes": {"pass": 15, "warning": 30},
+    "genome_length": {"pass": 15, "warning": 30},
+    "gc_content": {"pass": 5, "warning": 10},
+    "total_cds": {"pass": 15, "warning": 30},
+    "gene_density": {"pass": 15, "warning": 30}
 }
 
-# E. coli K-12 MG1655 identifiers for NCBI validation
-ECOLI_IDENTIFIERS = {
-    "accession": "NC_000913.3",
-    "organism": "Escherichia coli str. K-12 substr. MG1655",
-    "taxonomy_id": "511145"
+BACTERIAL_RANGES = {
+    "genome_length": {"min": 500000, "max": 15000000, "typical_min": 1000000, "typical_max": 8000000},
+    "gc_content": {"min": 20, "max": 80, "typical_min": 30, "typical_max": 70},
+    "gene_density": {"min": 400, "max": 1500, "typical_min": 800, "typical_max": 1100},
+    "total_genes": {"min": 400, "max": 12000, "typical_min": 1500, "typical_max": 7000},
+    "total_cds": {"min": 400, "max": 12000, "typical_min": 1500, "typical_max": 7000}
 }
 
 
 class Validator:
-    """Validator for genomic analysis results"""
-    
     def __init__(self):
-        self.reference = REFERENCE_VALUES
         self._last_result: ValidationResult = None
+        self._genome_data_list: List[Dict] = []
+        self._reference_values: Dict = {}
+    
+    def set_genome_data(self, genome_data_list: List[Dict]):
+        self._genome_data_list = genome_data_list
+        self._calculate_dynamic_reference()
+    
+    def _calculate_dynamic_reference(self):
+        if not self._genome_data_list:
+            return
+        metrics = ["total_genes", "genome_length", "gc_content", "total_cds", "gene_density"]
+        for metric in metrics:
+            values = [g.get(metric, 0) for g in self._genome_data_list if metric in g]
+            if values:
+                self._reference_values[metric] = {
+                    "value": float(np.mean(values)),
+                    "std": float(np.std(values)) if len(values) > 1 else 0,
+                    "min": float(min(values)),
+                    "max": float(max(values)),
+                    "count": len(values)
+                }
     
     def validate(self, calculated_values: Dict) -> ValidationResult:
-        """
-        Validate calculated values against reference
-        
-        Args:
-            calculated_values: Dictionary with metric names and values
-            
-        Returns:
-            ValidationResult with all validations
-        """
         items = []
+        num_genomes = len(self._genome_data_list)
         
-        for metric, calc_value in calculated_values.items():
-            if metric in self.reference:
-                ref_data = self.reference[metric]
-                ref_value = ref_data["value"]
-                tolerance = ref_data["tolerance"]
-                
-                # Calculate deviation
-                if ref_value != 0:
-                    deviation = abs(calc_value - ref_value) / ref_value * 100
-                else:
-                    deviation = 0 if calc_value == 0 else 100
-                
-                # Determine status
-                if deviation <= tolerance:
-                    status = ValidationStatus.PASS
-                elif deviation <= tolerance * 2:
-                    status = ValidationStatus.WARNING
-                else:
-                    status = ValidationStatus.FAIL
-                
-                items.append(ValidationItem(
-                    metric=metric,
-                    calculated=round(calc_value, 2),
-                    reference=ref_value,
-                    deviation_percent=round(deviation, 2),
-                    status=status
-                ))
+        if num_genomes > 1:
+            validation_type = "multi"
+            reference_source = f"Promedio de {num_genomes} genomas analizados"
+            for metric, calc_value in calculated_values.items():
+                if metric in self._reference_values:
+                    ref_data = self._reference_values[metric]
+                    ref_value = ref_data["value"]
+                    tolerances = DYNAMIC_TOLERANCES.get(metric, {"pass": 15, "warning": 30})
+                    if ref_value != 0:
+                        deviation = abs(calc_value - ref_value) / ref_value * 100
+                    else:
+                        deviation = 0 if calc_value == 0 else 100
+                    if deviation <= tolerances["pass"]:
+                        status = ValidationStatus.PASS
+                    elif deviation <= tolerances["warning"]:
+                        status = ValidationStatus.WARNING
+                    else:
+                        status = ValidationStatus.FAIL
+                    items.append(ValidationItem(
+                        metric=metric,
+                        calculated=round(calc_value, 2),
+                        reference=round(ref_value, 2),
+                        deviation_percent=round(deviation, 2),
+                        status=status
+                    ))
+        else:
+            validation_type = "single"
+            reference_source = "Rangos tipicos bacterianos"
+            for metric, calc_value in calculated_values.items():
+                if metric in BACTERIAL_RANGES:
+                    ranges = BACTERIAL_RANGES[metric]
+                    typical_center = (ranges["typical_min"] + ranges["typical_max"]) / 2
+                    typical_range = ranges["typical_max"] - ranges["typical_min"]
+                    distance_from_center = abs(calc_value - typical_center)
+                    deviation = (distance_from_center / (typical_range / 2)) * 100 if typical_range > 0 else 0
+                    in_absolute = ranges["min"] <= calc_value <= ranges["max"]
+                    in_typical = ranges["typical_min"] <= calc_value <= ranges["typical_max"]
+                    if in_typical:
+                        status = ValidationStatus.PASS
+                        deviation = min(deviation, 25)
+                    elif in_absolute:
+                        status = ValidationStatus.WARNING
+                    else:
+                        status = ValidationStatus.FAIL
+                    items.append(ValidationItem(
+                        metric=metric,
+                        calculated=round(calc_value, 2),
+                        reference=round(typical_center, 2),
+                        deviation_percent=round(min(deviation, 100), 2),
+                        status=status
+                    ))
         
-        # Determine overall status
         if any(item.status == ValidationStatus.FAIL for item in items):
             overall = ValidationStatus.FAIL
         elif any(item.status == ValidationStatus.WARNING for item in items):
@@ -140,120 +142,46 @@ class Validator:
         else:
             overall = ValidationStatus.PASS
         
-        result = ValidationResult(items=items, overall_status=overall)
+        result = ValidationResult(
+            items=items,
+            overall_status=overall,
+            validation_type=validation_type,
+            reference_source=reference_source
+        )
         self._last_result = result
         return result
     
-    def validate_genome_length(self, length: int) -> ValidationItem:
-        """Validate genome length specifically"""
-        ref = self.reference["genome_length"]
-        deviation = abs(length - ref["value"]) / ref["value"] * 100
-        
-        if deviation <= ref["tolerance"]:
-            status = ValidationStatus.PASS
-        elif deviation <= ref["tolerance"] * 2:
-            status = ValidationStatus.WARNING
-        else:
-            status = ValidationStatus.FAIL
-        
-        return ValidationItem(
-            metric="genome_length",
-            calculated=length,
-            reference=ref["value"],
-            deviation_percent=round(deviation, 2),
-            status=status
-        )
-    
-    def validate_gc_content(self, gc: float) -> ValidationItem:
-        """Validate GC content specifically"""
-        ref = self.reference["gc_content"]
-        deviation = abs(gc - ref["value"]) / ref["value"] * 100
-        
-        if deviation <= ref["tolerance"]:
-            status = ValidationStatus.PASS
-        elif deviation <= ref["tolerance"] * 2:
-            status = ValidationStatus.WARNING
-        else:
-            status = ValidationStatus.FAIL
-        
-        return ValidationItem(
-            metric="gc_content",
-            calculated=round(gc, 2),
-            reference=ref["value"],
-            deviation_percent=round(deviation, 2),
-            status=status
-        )
-    
-    def validate_gene_count(self, count: int) -> ValidationItem:
-        """Validate gene count specifically"""
-        ref = self.reference["total_genes"]
-        deviation = abs(count - ref["value"]) / ref["value"] * 100
-        
-        if deviation <= ref["tolerance"]:
-            status = ValidationStatus.PASS
-        elif deviation <= ref["tolerance"] * 2:
-            status = ValidationStatus.WARNING
-        else:
-            status = ValidationStatus.FAIL
-        
-        return ValidationItem(
-            metric="total_genes",
-            calculated=count,
-            reference=ref["value"],
-            deviation_percent=round(deviation, 2),
-            status=status
-        )
-    
     def get_reference_values(self) -> Dict:
-        """Get all reference values"""
+        if self._reference_values:
+            return {
+                metric: {"value": data["value"], "std": data.get("std", 0), "source": "dynamic_average"}
+                for metric, data in self._reference_values.items()
+            }
+        else:
+            return {
+                metric: {"value": (data["typical_min"] + data["typical_max"]) / 2, "source": "bacterial_ranges"}
+                for metric, data in BACTERIAL_RANGES.items()
+            }
+    
+    def get_group_statistics(self) -> Dict:
+        if not self._reference_values:
+            return {}
         return {
             metric: {
-                "value": data["value"],
-                "description": data["description"]
+                "mean": data["value"],
+                "std_dev": data.get("std", 0),
+                "min": data.get("min", 0),
+                "max": data.get("max", 0),
+                "count": data.get("count", 0),
+                "coefficient_of_variation": (data.get("std", 0) / data["value"] * 100) if data["value"] != 0 else 0
             }
-            for metric, data in self.reference.items()
-        }
-    
-    def validate_organism_ncbi(self, organism: str, email: str = "your.email@example.com") -> Dict:
-        """
-        Validate organism against NCBI using Bio.Entrez (opcional)
-        
-        Esta función usa Bio.Entrez para verificar que el organismo
-        analizado corresponde a E. coli K-12 MG1655.
-        
-        Args:
-            organism: Organism name from GenBank file
-            email: Email for NCBI Entrez (required by NCBI)
-            
-        Returns:
-            Dictionary with validation results
-        """
-        if not ENTREZ_AVAILABLE:
-            return {
-                "validated": False,
-                "message": "Bio.Entrez no disponible",
-                "expected": ECOLI_IDENTIFIERS["organism"],
-                "found": organism
-            }
-        
-        # Check if organism matches expected
-        expected = ECOLI_IDENTIFIERS["organism"]
-        is_valid = expected.lower() in organism.lower() or organism.lower() in expected.lower()
-        
-        return {
-            "validated": is_valid,
-            "message": "Organismo válido" if is_valid else "Organismo no coincide",
-            "expected": expected,
-            "found": organism,
-            "accession_expected": ECOLI_IDENTIFIERS["accession"]
+            for metric, data in self._reference_values.items()
         }
     
     def to_dict(self) -> Dict:
-        """Convert last result to dictionary"""
         if not self._last_result:
             return {}
-        
-        return {
+        result = {
             "items": [
                 {
                     "metric": item.metric,
@@ -264,5 +192,11 @@ class Validator:
                 }
                 for item in self._last_result.items
             ],
-            "overall_status": self._last_result.overall_status.value
+            "overall_status": self._last_result.overall_status.value,
+            "validation_type": self._last_result.validation_type,
+            "reference_source": self._last_result.reference_source
         }
+        group_stats = self.get_group_statistics()
+        if group_stats:
+            result["group_statistics"] = group_stats
+        return result

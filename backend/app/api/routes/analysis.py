@@ -35,7 +35,8 @@ _analysis_cache = {
     "genes": None,
     "validation": None,
     "genome_data": None,
-    "status": "idle"
+    "status": "idle",
+    "compared_genomes": []  # List of genome data dicts for dynamic validation
 }
 
 
@@ -168,7 +169,7 @@ async def analyze_genes(request: Request):
 @router.get("/validate", response_model=ValidationResponse)
 async def validate_results(request: Request):
     """
-    Validate analysis results against reference values
+    Validate analysis results dynamically against group average or bacterial ranges
     """
     global _analysis_cache
     
@@ -178,8 +179,13 @@ async def validate_results(request: Request):
     
     genes_result = _analysis_cache["genes"]
     
-    # Validate
+    # Validate with dynamic validation
     validator = Validator()
+    
+    # If we have compared genomes data, use it for dynamic validation
+    if _analysis_cache.get("compared_genomes"):
+        validator.set_genome_data(_analysis_cache["compared_genomes"])
+    
     calculated_values = {
         "total_genes": genes_result.total_genes,
         "genome_length": genes_result.genome_length,
