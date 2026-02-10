@@ -21,7 +21,7 @@ Funcionalidades:
 """
 import numpy as np
 from typing import List, Dict, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from ..genome_parser import GeneData
 
 
@@ -45,6 +45,10 @@ class GeneAnalysisResult:
     gene_density: float
     size_statistics: GeneStatistics
     genes: List[Dict]
+    length_distribution: Dict[str, int] = field(default_factory=dict)
+    strand_distribution: Dict[str, int] = field(default_factory=dict)
+    longest_gene: Optional[Dict] = None
+    shortest_gene: Optional[Dict] = None
 
 
 class GeneAnalyzer:
@@ -85,6 +89,12 @@ class GeneAnalyzer:
         gene_density = round((total_genes / genome_length) * 1_000_000, 2) if genome_length > 0 else 0
         
         # Calculate size statistics
+        length_dist = {
+            "0-300": 0, "300-600": 0, "600-900": 0, "900-1200": 0, 
+            "1200-1500": 0, "1500-2000": 0, "2000-3000": 0, "3000+": 0
+        }
+        strand_dist = {"1": 0, "-1": 0}
+        
         if genes:
             lengths = [g.length for g in genes]
             size_stats = GeneStatistics(
@@ -94,12 +104,31 @@ class GeneAnalyzer:
                 max=int(np.max(lengths)),
                 std=round(float(np.std(lengths)), 2)
             )
+            
+            # Distribution calculations
+            for length in lengths:
+                if length < 300: length_dist["0-300"] += 1
+                elif length < 600: length_dist["300-600"] += 1
+                elif length < 900: length_dist["600-900"] += 1
+                elif length < 1200: length_dist["900-1200"] += 1
+                elif length < 1500: length_dist["1200-1500"] += 1
+                elif length < 2000: length_dist["1500-2000"] += 1
+                elif length < 3000: length_dist["2000-3000"] += 1
+                else: length_dist["3000+"] += 1
+            
+            for g in genes:
+                strand_key = str(g.strand)
+                strand_dist[strand_key] = strand_dist.get(strand_key, 0) + 1
         else:
             size_stats = GeneStatistics(mean=0, median=0, min=0, max=0, std=0)
         
-        # Convert genes to dictionaries
-        genes_dict = [
-            {
+        # Convert genes to dictionaries and find extremes
+        genes_dict = []
+        longest = None
+        shortest = None
+        
+        for g in genes:
+            gene_dict = {
                 "locus_tag": g.locus_tag,
                 "start": g.start,
                 "end": g.end,
@@ -113,8 +142,12 @@ class GeneAnalyzer:
                 "stop_codon": getattr(g, 'stop_codon', None),
                 "has_introns": getattr(g, 'has_introns', False)
             }
-            for g in genes
-        ]
+            genes_dict.append(gene_dict)
+            
+            if longest is None or gene_dict["length"] > longest["length"]:
+                longest = gene_dict
+            if shortest is None or gene_dict["length"] < shortest["length"]:
+                shortest = gene_dict
         
         result = GeneAnalysisResult(
             total_genes=total_genes,
@@ -123,7 +156,11 @@ class GeneAnalyzer:
             gc_content=genome_gc,
             gene_density=gene_density,
             size_statistics=size_stats,
-            genes=genes_dict
+            genes=genes_dict,
+            length_distribution=length_dist,
+            strand_distribution=strand_dist,
+            longest_gene=longest,
+            shortest_gene=shortest
         )
         
         self._last_result = result

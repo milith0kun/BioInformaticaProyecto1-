@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from typing import Optional, List
 import os
 import httpx
+from Bio import SeqIO
 
 from app.core.ncbi_service import get_ncbi_service
 
@@ -21,20 +22,32 @@ router = APIRouter()
 
 
 def _get_genbank_path(request: Request) -> str:
-    """Get the active GenBank file path"""
+    """Get the active GenBank file path with auto-recovery"""
     file_detector = request.app.state.file_detector
 
+    # Auto-recovery: If no files detected, try to find any available genome
     if not file_detector.detected_files:
         project_root = file_detector.project_root
-        ncbi_folder = os.path.join(project_root, "ncbi_dataset")
-        if os.path.exists(ncbi_folder):
-            file_detector.scan_directory(ncbi_folder)
+        print(f"🔍 [RECOVERY] No active genome, searching in {project_root}/genomes")
+        
+        # Look into genomes folder
+        genomes_dir = os.path.join(project_root, "genomes")
+        if os.path.exists(genomes_dir):
+            for entry in os.listdir(genomes_dir):
+                if entry.startswith(("GCF_", "GCA_")):
+                    # Found a potential genome, try to activate it
+                    target = os.path.join(genomes_dir, entry, "extracted")
+                    if os.path.exists(target):
+                        print(f"✅ [RECOVERY] Auto-activating: {entry}")
+                        file_detector.scan_directory(target)
+                        break
 
     genbank_file = file_detector.get_genbank_file()
     if not genbank_file:
+        print("❌ [RECOVERY] No GenBank file found anywhere.")
         raise HTTPException(
             status_code=404,
-            detail="No se encontró archivo GenBank. Active un genoma primero."
+            detail="No hay un genoma activo. Por favor, selecciona y analiza un genoma en la pestaña Inicio."
         )
     return genbank_file.filepath
 
@@ -104,89 +117,254 @@ async def get_protein_detail(protein_id: str, request: Request):
 @router.post("/protein/predict-structure/{protein_id}")
 async def predict_protein_structure(protein_id: str, request: Request):
     """
-    Predict 3D structure using ESMFold API from protein sequence
-    Returns PDB format file that can be visualized in Molstar
+    Resolve 3D structure using multiple backends (cascade):
+    1. AlphaFold DB via UniProt xref in GenBank
+    2. AlphaFold DB via UniProt API mapping (RefSeq → UniProt)
+    3. RCSB PDB experimental structure search
+    4. ESMFold API (de novo, only for small proteins < 400 aa)
+    Returns PDB format file for Molstar visualization
     """
     genbank_path = _get_genbank_path(request)
-    service = get_ncbi_service()
-
-    # Optimized search: find specific protein without batch limit
-    print(f"🔍 Searching sequence for: {protein_id}")
+    
+    print(f"🔍 [PREDICT] Searching sequence for: {protein_id}")
     sequence = None
+    db_xrefs = []
+    product_name = ""
+    gene_name = ""
     
     try:
-        from Bio import SeqIO
-        for record in SeqIO.parse(genbank_path, "genbank"):
-            for feature in record.features:
-                if feature.type == "CDS":
-                    qualifiers = feature.qualifiers
-                    if qualifiers.get('protein_id', [''])[0] == protein_id or \
-                       qualifiers.get('locus_tag', [''])[0] == protein_id:
-                        sequence = qualifiers.get('translation', [''])[0]
-                        break
-            if sequence:
-                break
+        with open(genbank_path, "r") as handle:
+            for record in SeqIO.parse(handle, "genbank"):
+                for feature in record.features:
+                    if feature.type == "CDS":
+                        qual = feature.qualifiers
+                        if qual.get('protein_id', [''])[0] == protein_id or \
+                           qual.get('locus_tag', [''])[0] == protein_id:
+                            sequence = qual.get('translation', [''])[0]
+                            db_xrefs = qual.get('db_xref', [])
+                            product_name = qual.get('product', [''])[0]
+                            gene_name = qual.get('gene', [''])[0]
+                            break
+                if sequence:
+                    break
     except Exception as e:
-        print(f"❌ Error reading GenBank: {e}")
-        raise HTTPException(status_code=500, detail=f"Error leyendo archivo genómico: {str(e)}")
+        print(f"❌ [PREDICT] Error reading GenBank: {e}")
+        raise HTTPException(status_code=500, detail=f"Error en lectura genómica: {str(e)}")
 
     if not sequence:
-        print(f"⚠️ Protein {protein_id} not found in {os.path.basename(genbank_path)}")
-        raise HTTPException(status_code=404, detail=f"Proteína {protein_id} no encontrada en el genoma activo.")
+        raise HTTPException(status_code=404, detail=f"Proteína {protein_id} no identificada.")
 
-    # Validate sequence length (ESMFold has limits, but we increase it as requested)
-    if len(sequence) > 1000:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Secuencia demasiado larga ({len(sequence)} aa). El servidor público de ESMFold tiene un límite técnico. Intenta con una proteína < 400 aa."
-        )
+    sequence = sequence.upper().strip().replace("*", "")
+    seq_len = len(sequence)
+    print(f"🧬 [PREDICT] Sequence: {seq_len} aa | Product: {product_name} | Gene: {gene_name}")
 
-    if len(sequence) < 10:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Secuencia demasiado corta ({len(sequence)} aa). Mínimo 10 aminoácidos requeridos."
-        )
+    if seq_len < 5:
+        raise HTTPException(status_code=400, detail="Secuencia insuficiente para modelado.")
 
+    errors_log = []
+
+    # === STRATEGY 1: AlphaFold DB via GenBank UniProt xref ===
+    uniprot_id = None
+    for xref in db_xrefs:
+        if "UniProtKB" in xref:
+            uniprot_id = xref.split(":")[-1] if ":" in xref else None
+            break
+
+    if uniprot_id:
+        result = await _try_alphafold(protein_id, uniprot_id, errors_log)
+        if result:
+            return result
+
+    # === STRATEGY 2: AlphaFold DB via UniProt API mapping ===
+    if not uniprot_id:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                search_url = f"https://rest.uniprot.org/uniprotkb/search?query=xref:refseq-{protein_id}&fields=accession&format=json&size=1"
+                print(f"🔎 [PREDICT] UniProt lookup for RefSeq: {protein_id}")
+                uni_resp = await client.get(search_url)
+                if uni_resp.status_code == 200:
+                    results = uni_resp.json().get("results", [])
+                    if results:
+                        uniprot_id = results[0].get("primaryAccession")
+                        print(f"✅ [PREDICT] RefSeq → UniProt: {protein_id} → {uniprot_id}")
+                        result = await _try_alphafold(protein_id, uniprot_id, errors_log)
+                        if result:
+                            return result
+                    else:
+                        errors_log.append("UniProt: sin mapeo encontrado")
+                        print(f"⚠️ [PREDICT] No UniProt mapping for {protein_id}")
+        except Exception as e:
+            errors_log.append(f"UniProt API: {str(e)[:80]}")
+            print(f"⚠️ [PREDICT] UniProt lookup failed: {e}")
+
+    # === STRATEGY 3: RCSB PDB search (by ID, name, and sequence) ===
     try:
-        # Call ESMFold API with extended timeout
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            print(f"🧬 calling ESMFold for {protein_id} ({len(sequence)} aa)...")
-            response = await client.post(
-                "https://api.esmatlas.com/foldSequence/v1/pdb/",
-                data=sequence,
-                headers={"Content-Type": "text/plain"}
-            )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            pdb_id_found = None
+            
+            # 3a. Search by protein_id and product name
+            search_terms = [protein_id]
+            if product_name and len(product_name) > 3:
+                search_terms.append(product_name)
+            
+            for term in search_terms:
+                search_query = {
+                    "query": {
+                        "type": "terminal",
+                        "service": "text",
+                        "parameters": {"value": term}
+                    },
+                    "return_type": "entry",
+                    "request_options": {
+                        "results_content_type": ["experimental"],
+                        "paginate": {"start": 0, "rows": 1}
+                    }
+                }
+                print(f"🔎 [PREDICT] RCSB PDB text search: '{term}'")
+                pdb_resp = await client.post(
+                    "https://search.rcsb.org/rcsbsearch/v2/query",
+                    json=search_query
+                )
+                
+                if pdb_resp.status_code == 200:
+                    results = pdb_resp.json().get("result_set", [])
+                    if results:
+                        pdb_id_found = results[0].get("identifier", "")
+                        if pdb_id_found:
+                            print(f"✅ [PREDICT] RCSB found PDB '{pdb_id_found}' via term '{term}'")
+                            break
+            
+            # 3b. If text search failed, try sequence-based search
+            if not pdb_id_found and seq_len <= 1500:
+                try:
+                    seq_query = {
+                        "query": {
+                            "type": "terminal",
+                            "service": "sequence",
+                            "parameters": {
+                                "evalue_cutoff": 0.001,
+                                "identity_cutoff": 0.5,
+                                "sequence_type": "protein",
+                                "value": sequence[:1000]  # Limit to first 1000 aa for API
+                            }
+                        },
+                        "return_type": "entry",
+                        "request_options": {
+                            "results_content_type": ["experimental"],
+                            "paginate": {"start": 0, "rows": 1}
+                        }
+                    }
+                    print(f"🔎 [PREDICT] RCSB sequence search ({seq_len} aa)...")
+                    seq_resp = await client.post(
+                        "https://search.rcsb.org/rcsbsearch/v2/query",
+                        json=seq_query
+                    )
+                    if seq_resp.status_code == 200:
+                        results = seq_resp.json().get("result_set", [])
+                        if results:
+                            pdb_id_found = results[0].get("identifier", "")
+                            if pdb_id_found:
+                                print(f"✅ [PREDICT] RCSB found PDB '{pdb_id_found}' via sequence similarity")
+                except Exception as e:
+                    print(f"⚠️ [PREDICT] RCSB sequence search failed: {e}")
+            
+            # 3c. Download found PDB structure
+            if pdb_id_found:
+                # Extract just the entry ID (4 chars) if it contains chain info
+                entry_id = pdb_id_found[:4] if len(pdb_id_found) >= 4 else pdb_id_found
+                pdb_file_resp = await client.get(
+                    f"https://files.rcsb.org/download/{entry_id}.pdb",
+                    timeout=30.0
+                )
+                if pdb_file_resp.status_code == 200 and len(pdb_file_resp.text) > 100:
+                    print(f"✅ [PREDICT] RCSB PDB structure loaded: {entry_id}")
+                    return Response(
+                        content=pdb_file_resp.text,
+                        media_type="chemical/x-pdb",
+                        headers={
+                            "Content-Disposition": f"inline; filename={protein_id}_{entry_id}.pdb",
+                            "X-Structure-Source": "pdb"
+                        }
+                    )
+            
+            if not pdb_id_found:
+                errors_log.append("RCSB PDB: sin estructura encontrada")
+    except Exception as e:
+        errors_log.append(f"RCSB PDB: {str(e)[:80]}")
+        print(f"⚠️ [PREDICT] RCSB PDB search failed: {e}")
 
-            if response.status_code != 200:
-                error_body = response.text[:200]
-                print(f"❌ ESMFold API Error {response.status_code}: {error_body}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"ESMFold no pudo procesar la proteína: {error_body}"
+    # === STRATEGY 4: ESMFold API (only for small proteins, API may be unreliable) ===
+    if seq_len <= 400:
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                print(f"🛰️ [PREDICT] Trying ESMFold for {protein_id} ({seq_len} aa)...")
+                response = await client.post(
+                    "https://api.esmatlas.com/foldSequence/v1/pdb/",
+                    data=sequence,
+                    headers={"Content-Type": "text/plain"}
                 )
 
-            # Return PDB file directly
-            print(f"✅ ESMFold Success for {protein_id}")
-            return Response(
-                content=response.text,
-                media_type="chemical/x-pdb",
-                headers={
-                    "Content-Disposition": f"inline; filename={protein_id}_predicted.pdb"
-                }
-            )
+                if response.status_code == 200 and len(response.text) > 100:
+                    print(f"✅ [PREDICT] ESMFold success for {protein_id}")
+                    return Response(
+                        content=response.text,
+                        media_type="chemical/x-pdb",
+                        headers={
+                            "Content-Disposition": f"inline; filename={protein_id}_predicted.pdb",
+                            "X-Structure-Source": "esmfold"
+                        }
+                    )
+                else:
+                    errors_log.append(f"ESMFold: HTTP {response.status_code}")
+                    print(f"⚠️ [PREDICT] ESMFold rejected: {response.status_code}")
 
-    except httpx.TimeoutException:
-        print(f"⏱️ ESMFold Timeout for {protein_id}")
-        raise HTTPException(
-            status_code=504,
-            detail="El servidor de ESMFold tardó demasiado en responder. Es posible que esté saturado o la proteína sea muy compleja."
-        )
+        except httpx.TimeoutException:
+            errors_log.append("ESMFold: timeout")
+            print(f"⏱️ [PREDICT] ESMFold timeout for {protein_id}")
+        except Exception as e:
+            errors_log.append(f"ESMFold: {str(e)[:80]}")
+            print(f"⚠️ [PREDICT] ESMFold failed: {e}")
+    else:
+        errors_log.append(f"ESMFold: omitido (proteína de {seq_len} aa > 400 aa límite)")
+
+    # === ALL STRATEGIES FAILED ===
+    sources_tried = " | ".join(errors_log) if errors_log else "Todas las fuentes fallaron"
+    print(f"❌ [PREDICT] All strategies failed for {protein_id}: {sources_tried}")
+    raise HTTPException(
+        status_code=404,
+        detail=f"No se encontró estructura 3D para {protein_id} ({seq_len} aa, {product_name}). "
+               f"Fuentes intentadas: {sources_tried}. "
+               f"Busque manualmente en https://www.rcsb.org o https://alphafold.ebi.ac.uk"
+    )
+
+
+async def _try_alphafold(protein_id: str, uniprot_id: str, errors_log: list):
+    """Helper: try to fetch structure from AlphaFold DB for a given UniProt ID"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            # Try model versions v4, v3, v2
+            for version in [4, 3, 2]:
+                alphafold_url = f"https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-model_v{version}.pdb"
+                print(f"🔎 [PREDICT] Trying AlphaFold v{version}: {uniprot_id}")
+                af_response = await client.get(alphafold_url)
+                
+                if af_response.status_code == 200 and len(af_response.text) > 100:
+                    print(f"✅ [PREDICT] AlphaFold v{version} found for {protein_id} (UniProt: {uniprot_id})")
+                    return Response(
+                        content=af_response.text,
+                        media_type="chemical/x-pdb",
+                        headers={
+                            "Content-Disposition": f"inline; filename={protein_id}_alphafold_v{version}.pdb",
+                            "X-Structure-Source": "alphafold"
+                        }
+                    )
+            
+            errors_log.append(f"AlphaFold DB: no disponible para {uniprot_id}")
+            print(f"⚠️ [PREDICT] AlphaFold DB has no model for {uniprot_id}")
     except Exception as e:
-        print(f"❌ Unexpected Error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno en la predicción: {str(e)}"
-        )
+        errors_log.append(f"AlphaFold DB: {str(e)[:80]}")
+        print(f"⚠️ [PREDICT] AlphaFold DB failed: {e}")
+    return None
 
 
 # ==================== GENE LOCATION ====================

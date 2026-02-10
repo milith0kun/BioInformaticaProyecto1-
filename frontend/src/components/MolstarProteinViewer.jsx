@@ -16,7 +16,7 @@ const Molstar = ({ pdbUrl }) => {
 
   useEffect(() => {
     let isMounted = true;
-    
+
     async function init() {
       // Prevent concurrent initialization
       if (!parentRef.current || isInitializing.current) return;
@@ -26,7 +26,7 @@ const Molstar = ({ pdbUrl }) => {
       if (pluginRef.current) {
         try {
           pluginRef.current.dispose();
-        } catch (e) {}
+        } catch (e) { }
         pluginRef.current = null;
       }
 
@@ -37,16 +37,16 @@ const Molstar = ({ pdbUrl }) => {
 
       const spec = DefaultPluginUISpec();
       spec.layout = {
-          initial: {
-              isExpanded: false,
-              showControls: true,
-              controlsDisplay: 'reactive'
-          }
+        initial: {
+          isExpanded: false,
+          showControls: true,
+          controlsDisplay: 'reactive'
+        }
       };
 
       try {
         const plugin = await createPluginUI(parentRef.current, spec);
-        
+
         if (!isMounted) {
           plugin.dispose();
           isInitializing.current = false;
@@ -139,8 +139,10 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
       const blob = new Blob([pdbContent], { type: 'chemical/x-pdb' })
       const pdbUrl = URL.createObjectURL(blob)
 
+      // Detect source from response header
+      const source = response.headers.get('X-Structure-Source') || 'esmfold'
       setStructureUrl(pdbUrl)
-      setStructureSource('esmfold')
+      setStructureSource(source)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -181,7 +183,7 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
           <div className="w-28 h-28 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-10 border border-blue-100 relative">
             <span className="text-5xl animate-pulse">🧬</span>
           </div>
-          
+
           <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-4">Resolución Estructural</h3>
           <p className="text-slate-500 text-sm max-w-lg mx-auto mb-12 leading-relaxed font-medium">
             Para visualizar la arquitectura 3D, el sistema debe resolver la geometría molecular mediante IA o datos experimentales.
@@ -190,22 +192,21 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             <button
               onClick={predictStructure}
-              disabled={!proteinSequence || proteinSequence.length > 1000}
-              className={`group p-8 rounded-[2rem] border transition-all duration-500 text-left ${
-                proteinSequence?.length > 1000 
-                  ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' 
-                  : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow-xl'
-              }`}
+              disabled={!proteinSequence}
+              className={`group p-8 rounded-[2rem] border transition-all duration-500 text-left ${!proteinSequence
+                ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed'
+                : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow-xl'
+                }`}
             >
               <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-blue-50 rounded-2xl font-black text-xs text-blue-600">IA</div>
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">ESMFold</h4>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Resolver Estructura</h4>
               </div>
               <p className="text-xs text-slate-400 font-medium leading-relaxed">
-                Predicción de novo mediante redes neuronales (Hasta 1000 aa).
+                Busca en AlphaFold DB, RCSB PDB y ESMFold automáticamente. Sin límite de tamaño.
               </p>
-              {proteinSequence?.length > 1000 && (
-                <p className="mt-4 text-[10px] font-black text-rose-500 uppercase">Proteína demasiado grande ({proteinSequence.length} aa)</p>
+              {proteinSequence?.length > 800 && (
+                <p className="mt-4 text-[10px] font-black text-amber-500 uppercase">Proteína grande ({proteinSequence.length} aa): Puede demorar</p>
               )}
             </button>
 
@@ -225,7 +226,7 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
                   maxLength={10}
                 />
                 <button type="submit" className="px-4 bg-blue-600 text-white rounded-xl shadow-lg active:scale-95 transition-all">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} /></svg>
                 </button>
               </form>
             </div>
@@ -260,7 +261,7 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
             <div className="px-5 py-2.5 bg-white/90 backdrop-blur-xl border border-slate-200 rounded-full flex items-center gap-4 shadow-xl">
               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.4)] animate-pulse"></div>
               <span className="text-[10px] font-black text-slate-700 uppercase tracking-[0.15em]">
-                {structureSource === 'pdb' ? 'Modelo Experimental' : 'Predicción Molecular'}
+                {structureSource === 'pdb' ? 'Modelo Experimental' : structureSource === 'alphafold' ? 'AlphaFold DB' : 'ESMFold Prediction'}
               </span>
               <div className="w-px h-3 bg-slate-200"></div>
               <span className="text-[9px] font-bold text-slate-400">{proteinSequence?.length} aa</span>
@@ -268,12 +269,12 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
           </div>
 
           <div className="absolute top-8 right-8 z-10 flex gap-3">
-            <button 
-              onClick={() => setStructureUrl(null)} 
+            <button
+              onClick={() => setStructureUrl(null)}
               className="w-12 h-12 bg-white/90 backdrop-blur-xl border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 transition-all flex items-center justify-center shadow-xl group/btn"
               title="Reiniciar Resolución"
             >
-              <svg className="w-5 h-5 group-hover/btn:rotate-180 transition-transform duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
+              <svg className="w-5 h-5 group-hover/btn:rotate-180 transition-transform duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} /></svg>
             </button>
           </div>
 
