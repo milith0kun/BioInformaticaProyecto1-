@@ -42,8 +42,11 @@ export default function CentralDogma() {
   const loadInitialGenes = async () => {
     try {
       const result = await api.getGeneResults(1, 24)
-      setGeneList(result.genes || [])
-    } catch (e) { console.error(e) }
+      setGeneList(result?.genes || [])
+    } catch (e) {
+      console.warn('Genes no disponibles aún:', e.message)
+      setGeneList([])
+    }
   }
 
   const handleSearch = async (tag) => {

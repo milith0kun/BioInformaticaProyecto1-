@@ -307,8 +307,14 @@ async def get_gene_results(request: Request, page: int = 1, page_size: int = 50,
         try:
             await analyze_genes(request)
         except Exception as e:
-            print(f"❌ [ANALYSIS] Auto-run failed: {e}")
-            raise HTTPException(status_code=404, detail="Análisis no disponible. Por favor, ejecute el análisis completo.")
+            print(f"⚠️ [ANALYSIS] Auto-run failed: {e} — returning empty response")
+            return PaginatedGenesResponse(
+                genes=[],
+                total=0,
+                page=1,
+                page_size=page_size,
+                total_pages=0
+            )
     
     genes_result = _analysis_cache["genes"]
     all_genes = genes_result.genes

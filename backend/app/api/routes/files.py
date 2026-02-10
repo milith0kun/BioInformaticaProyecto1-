@@ -90,8 +90,10 @@ async def detect_files(request: Request):
             filepath=f["filepath"],
             extension=f["extension"],
             size_bytes=f["size_bytes"],
+            size_mb=round(f["size_bytes"] / (1024 * 1024), 2),
             file_type=f["file_type"],
-            is_primary=f.get("is_primary", False)
+            is_primary=f.get("is_primary", False),
+            accession=f.get("accession", "")
         )
         for f in all_files
     ]

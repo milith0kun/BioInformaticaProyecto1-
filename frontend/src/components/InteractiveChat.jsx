@@ -100,7 +100,9 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
     setIsLoading(true)
 
     try {
-      const response = await api.sendChatMessage(textToSend)
+      // Extract accession from currentGenome object
+      const genomeAccession = currentGenome?.accession || null
+      const response = await api.sendChatMessage(textToSend, 'default', true, genomeAccession)
 
       const aiMessage = {
         role: 'assistant',

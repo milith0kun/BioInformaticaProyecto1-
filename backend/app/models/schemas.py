@@ -17,8 +17,10 @@ class FileInfo(BaseModel):
     filepath: str
     extension: str
     size_bytes: int
+    size_mb: float = 0.0
     file_type: str
     is_primary: bool = False
+    accession: str = ""
 
 
 class FileListResponse(BaseModel):

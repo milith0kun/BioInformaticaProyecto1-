@@ -572,15 +572,16 @@ async def get_genes_by_size(
         order: 'largest' o 'smallest'
         count: Número de genes a retornar (default 10)
     """
-    from app.api.routes.analysis import _analysis_cache
+    from app.api.routes.analysis import get_analysis_cache
+    analysis_cache = get_analysis_cache()
     
-    if _analysis_cache["genome_data"] is None:
+    if analysis_cache["genome_data"] is None:
         raise HTTPException(
             status_code=404,
             detail="No hay análisis ejecutado. Ejecute el análisis primero."
         )
     
-    genome_data = _analysis_cache["genome_data"]
+    genome_data = analysis_cache["genome_data"]
     comparator = get_genome_comparator()
     
     result = comparator.get_genes_by_size(
@@ -606,15 +607,16 @@ async def get_genes_by_group(request: Request, group_id: str):
     Args:
         group_id: ID del grupo (metabolism, transport, regulation, etc.)
     """
-    from app.api.routes.analysis import _analysis_cache
+    from app.api.routes.analysis import get_analysis_cache
+    analysis_cache = get_analysis_cache()
     
-    if _analysis_cache["genome_data"] is None:
+    if analysis_cache["genome_data"] is None:
         raise HTTPException(
             status_code=404,
             detail="No hay análisis ejecutado. Ejecute el análisis primero."
         )
     
-    genome_data = _analysis_cache["genome_data"]
+    genome_data = analysis_cache["genome_data"]
     comparator = get_genome_comparator()
     
     result = comparator.filter_genes_by_group(
@@ -647,15 +649,16 @@ async def search_genes_advanced(
     """
     Búsqueda avanzada de genes con múltiples filtros
     """
-    from app.api.routes.analysis import _analysis_cache
+    from app.api.routes.analysis import get_analysis_cache
+    analysis_cache = get_analysis_cache()
     
-    if _analysis_cache["genome_data"] is None:
+    if analysis_cache["genome_data"] is None:
         raise HTTPException(
             status_code=404,
             detail="No hay análisis ejecutado. Ejecute el análisis primero."
         )
     
-    genome_data = _analysis_cache["genome_data"]
+    genome_data = analysis_cache["genome_data"]
     comparator = get_genome_comparator()
     
     result = comparator.search_genes_advanced(
@@ -691,15 +694,16 @@ async def get_gene_groups_summary(request: Request):
     """
     Obtener resumen de genes por grupo funcional
     """
-    from app.api.routes.analysis import _analysis_cache
+    from app.api.routes.analysis import get_analysis_cache
+    analysis_cache = get_analysis_cache()
     
-    if _analysis_cache["genome_data"] is None:
+    if analysis_cache["genome_data"] is None:
         raise HTTPException(
             status_code=404,
             detail="No hay análisis ejecutado. Ejecute el análisis primero."
         )
     
-    genome_data = _analysis_cache["genome_data"]
+    genome_data = analysis_cache["genome_data"]
     comparator = get_genome_comparator()
     
     summaries = comparator.get_gene_groups_summary(

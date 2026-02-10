@@ -284,11 +284,12 @@ export const api = {
 
   // ================== AI CHAT ==================
 
-  sendChatMessage: async (message, sessionId = 'default', includeGenomeContext = true) => {
+  sendChatMessage: async (message, sessionId = 'default', includeGenomeContext = true, genomeAccession = null) => {
     const response = await axiosInstance.post('/chat/message', {
       message,
       session_id: sessionId,
-      include_genome_context: includeGenomeContext
+      include_genome_context: includeGenomeContext,
+      genome_accession: genomeAccession
     })
     return response.data
   },

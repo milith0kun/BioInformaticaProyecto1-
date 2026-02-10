@@ -23,6 +23,7 @@ class DetectedFile:
 FILE_TYPE_MAP = {
     '.gbff': 'GenBank Full Flat File',
     '.gb': 'GenBank',
+    '.gbk': 'GenBank',  # Added common extension
     '.genbank': 'GenBank',
     '.fna': 'FASTA Nucleotide',
     '.fasta': 'FASTA',
@@ -36,10 +37,11 @@ FILE_TYPE_MAP = {
     '.tsv': 'Tab-Separated Values',
     '.csv': 'Comma-Separated Values',
     '.txt': 'Text File',
+    '.md': 'Markdown Documentation', # Added md
 }
 
 # Priority order for primary file selection
-PRIMARY_FILE_PRIORITY = ['.gbff', '.gb', '.genbank', '.gff', '.gtf', '.fna', '.fasta']
+PRIMARY_FILE_PRIORITY = ['.gbff', '.gbk', '.gb', '.genbank', '.gff', '.gtf', '.fna', '.fasta']
 
 
 class FileDetector:

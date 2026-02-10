@@ -59,11 +59,14 @@ export default function GeneStatistics({ geneData }) {
     setLoading(true)
     try {
       const result = await api.getGeneResults(pageNum, pageSize, search)
-      setPaginatedGenes(result.genes || [])
-      setTotalPages(result.total_pages || 1)
-      setTotalGenesCount(result.total || 0)
+      setPaginatedGenes(result?.genes || [])
+      setTotalPages(result?.total_pages || 1)
+      setTotalGenesCount(result?.total || 0)
     } catch (e) {
-      console.error("Error cargando tabla de genes:", e)
+      console.warn('Genes no disponibles aún:', e.message)
+      setPaginatedGenes([])
+      setTotalPages(1)
+      setTotalGenesCount(0)
     } finally {
       setLoading(false)
     }

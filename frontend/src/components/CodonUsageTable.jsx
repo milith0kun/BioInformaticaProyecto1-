@@ -4,6 +4,16 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import api from '../services/api'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts'
 
 const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#0f172a']
 
@@ -35,6 +45,45 @@ export default function CodonUsageTable() {
     if (!data?.codon_table) return []
     const aas = new Set(data.codon_table.map(row => row.amino_acid_name))
     return ['All', ...Array.from(aas).sort()]
+  }, [data])
+
+  // Group codons by amino acid for the amino tab
+  const codonsByAminoAcid = useMemo(() => {
+    if (!data?.codon_table) return {}
+    const grouped = {}
+    for (const row of data.codon_table) {
+      const aaName = row.amino_acid_name
+      if (!grouped[aaName]) {
+        grouped[aaName] = {
+          name: aaName,
+          letter: row.letter,
+          codons: []
+        }
+      }
+      grouped[aaName].codons.push(row)
+    }
+    // Sort codons within each group by RSCU desc
+    for (const aa in grouped) {
+      grouped[aa].codons.sort((a, b) => (b.rscu || 0) - (a.rscu || 0))
+    }
+    return grouped
+  }, [data])
+
+  const aminoAcidList = useMemo(() => {
+    return Object.keys(codonsByAminoAcid).sort()
+  }, [codonsByAminoAcid])
+
+  // Top 20 codons for visualization
+  const topCodons = useMemo(() => {
+    if (!data?.codon_table) return []
+    return [...data.codon_table]
+      .sort((a, b) => (b.rscu || 0) - (a.rscu || 0))
+      .slice(0, 20)
+      .map(c => ({
+        codon: c.codon,
+        rscu: c.rscu,
+        aa: c.amino_acid_name
+      }))
   }, [data])
 
   const filteredTable = useMemo(() => {
@@ -227,18 +276,126 @@ export default function CodonUsageTable() {
         )}
 
         {activeTab === 'amino' && (
-          <div className="p-20 text-center space-y-4">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-2xl">🧪</div>
-            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tighter">Vista Agrupada por Aminoácido</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">Seleccione un aminoácido en el filtro superior para ver sus codones sinónimos y su adaptabilidad relativa.</p>
+          <div className="p-8 space-y-8">
+            {aminoAcidList.filter(aaName => aaFilter === 'All' || aaName === aaFilter).map(aaName => {
+              const group = codonsByAminoAcid[aaName]
+              return (
+                <div key={aaName} className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-slate-200 shadow-sm">
+                        <span className="text-lg font-black text-blue-600">{group.letter}</span>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{group.name}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{group.codons.length} codones sinónimos</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {group.codons.map((codon, idx) => (
+                      <div key={idx} className="bg-white rounded-2xl p-5 border border-slate-100 hover:shadow-md transition-all group">
+                        <div className="text-center space-y-2">
+                          <p className="font-mono text-sm font-black text-blue-600 tracking-widest">{codon.codon}</p>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[9px]">
+                              <span className="text-slate-400 font-bold uppercase">Conteo</span>
+                              <span className="font-black text-slate-700">{(codon.count || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[9px]">
+                              <span className="text-slate-400 font-bold uppercase">RSCU</span>
+                              <span className="font-black text-indigo-600">{(codon.rscu || 0).toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-2">
+                            <div className={`h-full transition-all ${
+                              codon.rscu >= 1.5 ? 'bg-blue-600' : 
+                              codon.rscu >= 1.0 ? 'bg-indigo-400' : 
+                              codon.rscu >= 0.5 ? 'bg-slate-400' : 'bg-slate-300'
+                            }`} style={{ width: `${Math.min((codon.rscu/3)*100, 100)}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
         {activeTab === 'viz' && (
-          <div className="p-20 text-center space-y-4">
-            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto text-2xl">📊</div>
-            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tighter">Visualización Estadística</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">Mapas de calor y gráficos de dispersión de uso de codones optimizados para análisis de sesgo genómico.</p>
+          <div className="p-8 space-y-8">
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">📈 Top 20 Codones por RSCU</h4>
+              <p className="text-xs text-slate-500">Codones con mayor sesgo de uso (RSCU {'>'} 1 indica preferencia)</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl border border-slate-100 p-6">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={topCodons} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="codon" 
+                    angle={-45}
+                    textAnchor="end"
+                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                    label={{ value: 'RSCU', angle: -90, position: 'insideLeft', style: { fontSize: 12, fontWeight: 700, fill: '#475569' } }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#0f172a', 
+                      border: 'none', 
+                      borderRadius: '12px', 
+                      padding: '12px',
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+                    }}
+                    labelStyle={{ color: '#60a5fa', fontWeight: 900, fontSize: 11, textTransform: 'uppercase', fontFamily: 'monospace' }}
+                    itemStyle={{ color: '#fff', fontWeight: 700, fontSize: 10 }}
+                    formatter={(value, name, props) => [
+                      value.toFixed(3),
+                      `RSCU (${props.payload.aa})`
+                    ]}
+                  />
+                  <Bar dataKey="rscu" radius={[8, 8, 0, 0]}>
+                    {topCodons.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* RSCU Interpretation Guide */}
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+              <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interpretación de RSCU</h5>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-blue-600"></div>
+                    <span className="text-xs font-black text-slate-900">RSCU {'>'} 1.6</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">Codón fuertemente preferido. Alta expresión esperada.</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-indigo-400"></div>
+                    <span className="text-xs font-black text-slate-900">RSCU ≈ 1.0</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">Uso neutral, sin sesgo significativo.</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-slate-400"></div>
+                    <span className="text-xs font-black text-slate-900">RSCU {'<'} 0.6</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">Codón poco usado. Posible regulación traduccional.</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -8,7 +8,6 @@ import DataExport from './components/DataExport'
 import AIValidation from './components/AIValidation'
 import GenomeSelector from './components/GenomeSelector'
 import GenomeComparison from './components/GenomeComparison'
-import GeneFilter from './components/GeneFilter'
 import MultiGenomeAnalyzer from './components/MultiGenomeAnalyzer'
 import GenomeMultiSelector from './components/GenomeMultiSelector'
 import ComparisonResults from './components/ComparisonResults'
@@ -296,7 +295,6 @@ function App() {
         { id: 'dogma', name: 'Dogma Central', description: 'DNA → RNA → Proteína' },
         { id: 'gc-window', name: 'Ventana GC', description: 'Contenido GC por ventana' },
         { id: 'blast', name: 'BLAST Search', description: 'Búsqueda de similitud' },
-        { id: 'filter', name: 'Filtro de Genes', description: 'Filtrado avanzado' },
       ]
     },
     {
@@ -625,7 +623,6 @@ function App() {
                   {activeView === 'codons' && <CodonVisualization codonData={analysisData?.codons} />}
                   {activeView === 'comparison' && <ComparisonResults comparisonResult={comparisonResult} selectedGenomes={selectedGenomes} />}
                   {activeView === 'genes' && <GeneStatistics geneData={analysisData?.genes} />}
-                  {activeView === 'filter' && <GeneFilter hasAnalysis={!!analysisData} />}
                   {activeView === 'files' && <FileManager files={files} onRefresh={loadFiles} selectedGenomes={selectedGenomes} />}
                   {activeView === 'genome-map' && <GenomeViewer />}
                   {activeView === 'dogma' && <CentralDogma />}

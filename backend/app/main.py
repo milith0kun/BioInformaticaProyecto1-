@@ -43,6 +43,34 @@ async def lifespan(app: FastAPI):
     if os.path.exists(ncbi_folder):
         print(f"📁 Encontrada carpeta ncbi_dataset, escaneando archivos...")
         app.state.file_detector.scan_directory(ncbi_folder)
+
+    # NEW: Check for genomes managed by NCBIDownloader (genomes/ folder)
+    genomes_dir = os.path.join(project_root, "genomes")
+    if os.path.exists(genomes_dir):
+        print(f"📁 Encontrada estructura de genomas múltiples en: {genomes_dir}")
+        try:
+            from app.core.ncbi_downloader import NCBIDownloader
+            api_key = os.environ.get("NCBI_API_KEY")
+            downloader = NCBIDownloader(genomes_dir, api_key)
+            app.state.ncbi_downloader = downloader
+            
+            # Auto-activate the first available genome found
+            available = downloader.get_available_genomes_dir()
+            if available:
+                # Pick the first one (or ideally the last modified, but list is usually enough)
+                latest = available[0]
+                accession = latest['accession']
+                print(f"🔄 Auto-activando genoma persistente: {accession}")
+                
+                # Load metadata
+                downloader.get_genome_info(accession)
+                
+                # Update file detector to point to this genome's extracted files
+                if latest.get('extracted_dir') and os.path.exists(latest['extracted_dir']):
+                    app.state.file_detector.scan_directory(latest['extracted_dir'])
+                    print(f"   ↳ Archivos escaneados en FileDetector: {len(app.state.file_detector.detected_files)}")
+        except Exception as e:
+            print(f"⚠️ Error al inicializar genomas: {e}")
     
     # Create cache directory
     cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
