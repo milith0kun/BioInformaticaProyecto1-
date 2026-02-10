@@ -110,26 +110,35 @@ async def predict_protein_structure(protein_id: str, request: Request):
     genbank_path = _get_genbank_path(request)
     service = get_ncbi_service()
 
-    # Get protein with full sequence
-    proteins = service.get_proteins_from_genbank(genbank_path, limit=10000)
-    protein = None
-    for p in proteins:
-        if p.get("protein_id") == protein_id or p.get("locus_tag") == protein_id:
-            protein = p
-            break
+    # Optimized search: find specific protein without batch limit
+    print(f"🔍 Searching sequence for: {protein_id}")
+    sequence = None
+    
+    try:
+        from Bio import SeqIO
+        for record in SeqIO.parse(genbank_path, "genbank"):
+            for feature in record.features:
+                if feature.type == "CDS":
+                    qualifiers = feature.qualifiers
+                    if qualifiers.get('protein_id', [''])[0] == protein_id or \
+                       qualifiers.get('locus_tag', [''])[0] == protein_id:
+                        sequence = qualifiers.get('translation', [''])[0]
+                        break
+            if sequence:
+                break
+    except Exception as e:
+        print(f"❌ Error reading GenBank: {e}")
+        raise HTTPException(status_code=500, detail=f"Error leyendo archivo genómico: {str(e)}")
 
-    if not protein:
-        raise HTTPException(status_code=404, detail=f"Proteína no encontrada: {protein_id}")
-
-    sequence = protein.get("full_sequence", "")
     if not sequence:
-        raise HTTPException(status_code=400, detail="La proteína no tiene secuencia disponible")
+        print(f"⚠️ Protein {protein_id} not found in {os.path.basename(genbank_path)}")
+        raise HTTPException(status_code=404, detail=f"Proteína {protein_id} no encontrada en el genoma activo.")
 
     # Validate sequence length (ESMFold has limits, but we increase it as requested)
     if len(sequence) > 1000:
         raise HTTPException(
             status_code=400,
-            detail=f"Secuencia demasiado larga ({len(sequence)} aa). ESMFold soporta un máximo extendido de 1000 aminoácidos en esta plataforma."
+            detail=f"Secuencia demasiado larga ({len(sequence)} aa). El servidor público de ESMFold tiene un límite técnico. Intenta con una proteína < 400 aa."
         )
 
     if len(sequence) < 10:
@@ -141,6 +150,7 @@ async def predict_protein_structure(protein_id: str, request: Request):
     try:
         # Call ESMFold API with extended timeout
         async with httpx.AsyncClient(timeout=120.0) as client:
+            print(f"🧬 calling ESMFold for {protein_id} ({len(sequence)} aa)...")
             response = await client.post(
                 "https://api.esmatlas.com/foldSequence/v1/pdb/",
                 data=sequence,
@@ -148,15 +158,17 @@ async def predict_protein_structure(protein_id: str, request: Request):
             )
 
             if response.status_code != 200:
+                error_body = response.text[:200]
+                print(f"❌ ESMFold API Error {response.status_code}: {error_body}")
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"ESMFold API error: {response.text}"
+                    detail=f"ESMFold no pudo procesar la proteína: {error_body}"
                 )
 
             # Return PDB file directly
-            pdb_content = response.text
+            print(f"✅ ESMFold Success for {protein_id}")
             return Response(
-                content=pdb_content,
+                content=response.text,
                 media_type="chemical/x-pdb",
                 headers={
                     "Content-Disposition": f"inline; filename={protein_id}_predicted.pdb"
@@ -164,14 +176,16 @@ async def predict_protein_structure(protein_id: str, request: Request):
             )
 
     except httpx.TimeoutException:
+        print(f"⏱️ ESMFold Timeout for {protein_id}")
         raise HTTPException(
             status_code=504,
-            detail="Timeout esperando respuesta de ESMFold. Intenta con una proteína más pequeña."
+            detail="El servidor de ESMFold tardó demasiado en responder. Es posible que esté saturado o la proteína sea muy compleja."
         )
     except Exception as e:
+        print(f"❌ Unexpected Error: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error prediciendo estructura: {str(e)}"
+            detail=f"Error interno en la predicción: {str(e)}"
         )
 
 

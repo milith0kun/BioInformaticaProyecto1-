@@ -33,45 +33,32 @@ export default function PhylogeneticTree() {
     const drawTree = useCallback(() => {
         if (!data?.tree || !canvasRef.current) return
 
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        const dpr = window.devicePixelRatio || 1
+
+        // Dynamic width calculation
+        const containerWidth = canvas.parentElement.clientWidth || 800
+        const displayW = Math.max(800, containerWidth - 40)
+
         // Handle single genome case
         if (data.single_genome) {
-            const canvas = canvasRef.current
-            const ctx = canvas.getContext('2d')
-            const dpr = window.devicePixelRatio || 1
-
-            const displayW = canvas.parentElement.clientWidth - 40
             const displayH = 200
-
             canvas.width = displayW * dpr
             canvas.height = displayH * dpr
             canvas.style.width = displayW + 'px'
             canvas.style.height = displayH + 'px'
             ctx.scale(dpr, dpr)
-
-            // Clear
-            ctx.fillStyle = '#f8fafc'
+            ctx.fillStyle = '#ffffff'
             ctx.fillRect(0, 0, displayW, displayH)
-
-            // Draw single genome indicator
-            ctx.fillStyle = '#334155'
-            ctx.font = 'bold 14px system-ui, sans-serif'
-            ctx.textAlign = 'center'
-            ctx.fillText('Genoma Único - Sin comparación disponible', displayW / 2, displayH / 2 - 20)
-
             ctx.fillStyle = '#64748b'
-            ctx.font = '12px system-ui, sans-serif'
-            ctx.fillText(`${data.labels[0]}`, displayW / 2, displayH / 2 + 10)
-
+            ctx.font = '700 14px system-ui, sans-serif'
+            ctx.textAlign = 'center'
+            ctx.fillText('Genoma Único — Comparación no disponible', displayW / 2, displayH / 2)
             return
         }
 
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        const dpr = window.devicePixelRatio || 1
-
-        const displayW = canvas.parentElement.clientWidth - 40
-        // Adjust height based on number of genomes (more space for more genomes)
-        const baseSpacing = data.labels.length <= 5 ? 80 : data.labels.length <= 10 ? 60 : 45
+        const baseSpacing = data.labels.length <= 5 ? 100 : data.labels.length <= 10 ? 80 : 60
         const displayH = Math.max(400, data.labels.length * baseSpacing)
 
         canvas.width = displayW * dpr
@@ -80,88 +67,89 @@ export default function PhylogeneticTree() {
         canvas.style.height = displayH + 'px'
         ctx.scale(dpr, dpr)
 
-        // Clear
-        ctx.fillStyle = '#f8fafc'
+        // Clean Laboratory Background
+        ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, displayW, displayH)
 
-        const marginLeft = 40
-        const marginRight = 220 // space for labels
-        const marginTop = 30
-        const marginBottom = 30
+        const marginLeft = 80
+        const marginRight = 350 // Ample space for long labels and Mb info
+        const marginTop = 80
+        const marginBottom = 80
         const treeW = displayW - marginLeft - marginRight
         const treeH = displayH - marginTop - marginBottom
 
-        const leaves = data.labels
-        const n = leaves.length
-        const leafSpacing = treeH / (n + 1)
+        // Get leaf order from tree traversal to prevent crossing branches
+        const orderedLeaves = []
+        const getLeafOrder = (node) => {
+            if (!node.children || node.children.length === 0) {
+                orderedLeaves.push(node.name)
+            } else {
+                // Draw higher nodes first for cleaner look
+                const sortedChildren = [...node.children].sort((a, b) => (b.height || 0) - (a.height || 0))
+                sortedChildren.forEach(getLeafOrder)
+            }
+        }
+        getLeafOrder(data.tree)
 
-        // Assign y positions to leaves
+        const n = orderedLeaves.length
+        const leafSpacing = treeH / (n - 1 || 1)
+
+        // Map labels to y positions using tree order
         const leafY = {}
-        leaves.forEach((label, i) => {
-            leafY[label] = marginTop + (i + 1) * leafSpacing
+        orderedLeaves.forEach((label, i) => {
+            leafY[label] = marginTop + i * leafSpacing
         })
 
-        // Get max height for scaling
+        // Scale x position: root at marginLeft, leaves at marginLeft + treeW
         const getMaxHeight = (node) => {
             if (!node.children || node.children.length === 0) return 0
             return Math.max(node.height || 0, ...node.children.map(getMaxHeight))
         }
         const maxH = getMaxHeight(data.tree) || 1
+        
+        // Root is at height maxH, leaves at height 0
+        const xScale = (h) => marginLeft + (1 - h / maxH) * treeW
 
-        // Scale x position based on height
-        const xScale = (h) => marginLeft + (h / maxH) * treeW
-
-        // Colors for branches
-        const BRANCH_COLORS = ['#14b8a6', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6',
-            '#ec4899', '#06b6d4', '#10b981', '#f97316', '#3b82f6']
-
-        let colorIdx = 0
+        const COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e']
 
         // Recursive draw
-        const drawNode = (node, depth = 0) => {
+        const drawNode = (node) => {
             if (!node.children || node.children.length === 0) {
-                // Leaf node
-                const y = leafY[node.name]
-                if (y === undefined) return { y, x: marginLeft }
-                return { y, x: marginLeft }
+                return { y: leafY[node.name], x: marginLeft + treeW }
             }
 
-            const childPositions = node.children.map(child => drawNode(child, depth + 1))
-
-            // Node position
+            const childPositions = node.children.map(drawNode)
             const nodeX = xScale(node.height || 0)
             const minY = Math.min(...childPositions.map(p => p.y))
             const maxY = Math.max(...childPositions.map(p => p.y))
             const nodeY = (minY + maxY) / 2
 
-            const branchColor = BRANCH_COLORS[colorIdx % BRANCH_COLORS.length]
-            colorIdx++
-
             // Draw vertical connector
             ctx.beginPath()
-            ctx.strokeStyle = branchColor
-            ctx.lineWidth = 2
+            ctx.strokeStyle = '#cbd5e1'
+            ctx.lineWidth = 2.5
+            ctx.lineCap = 'round'
+            ctx.lineJoin = 'round'
             ctx.moveTo(nodeX, minY)
             ctx.lineTo(nodeX, maxY)
             ctx.stroke()
 
-            // Draw horizontal branches to children
+            // Draw horizontal branches
             childPositions.forEach((pos, i) => {
                 ctx.beginPath()
-                ctx.strokeStyle = branchColor
-                ctx.lineWidth = 2
+                ctx.strokeStyle = '#cbd5e1'
                 ctx.moveTo(nodeX, pos.y)
                 ctx.lineTo(pos.x, pos.y)
                 ctx.stroke()
 
-                // Distance label on branch
+                // Branch length label - Only show if significant and enough space
                 const child = node.children[i]
-                if (child.branch_length !== undefined) {
+                if (child.branch_length !== undefined && child.branch_length > 0.0001) {
                     const midX = (nodeX + pos.x) / 2
-                    ctx.fillStyle = '#94a3b8'
-                    ctx.font = '9px monospace'
+                    ctx.fillStyle = '#64748b'
+                    ctx.font = 'italic 9px font-mono'
                     ctx.textAlign = 'center'
-                    ctx.fillText(child.branch_length.toFixed(3), midX, pos.y - 5)
+                    ctx.fillText(child.branch_length.toFixed(4), midX, pos.y - 6)
                 }
             })
 
@@ -170,55 +158,65 @@ export default function PhylogeneticTree() {
 
         drawNode(data.tree)
 
-        // Draw leaf labels
+        // Draw leaf info and dots using tree order
         ctx.textAlign = 'left'
         ctx.textBaseline = 'middle'
-        leaves.forEach((label, i) => {
+        orderedLeaves.forEach((label, i) => {
             const y = leafY[label]
+            const x = marginLeft + treeW
 
-            // Draw dot
+            // Connection dot
             ctx.beginPath()
-            ctx.fillStyle = BRANCH_COLORS[i % BRANCH_COLORS.length]
-            ctx.arc(marginLeft - 5, y, 4, 0, Math.PI * 2)
+            ctx.fillStyle = COLORS[i % COLORS.length]
+            ctx.arc(x, y, 6, 0, Math.PI * 2)
             ctx.fill()
+            ctx.strokeStyle = '#ffffff'
+            ctx.lineWidth = 2
+            ctx.stroke()
 
-            // Draw label
+            // Label - Use 900 for extra bold
             ctx.fillStyle = '#1e293b'
-            ctx.font = 'bold 12px system-ui, sans-serif'
-            ctx.fillText(label, marginLeft + 5, y)
+            ctx.font = '900 13px system-ui, sans-serif'
+            ctx.fillText(label, x + 20, y - 10)
 
-            // Draw genome info
+            // Subtitle info
             const genome = data.genomes?.find(g => g.name === label)
             if (genome) {
                 ctx.fillStyle = '#64748b'
-                ctx.font = '10px system-ui, sans-serif'
+                ctx.font = '500 11px system-ui, sans-serif'
                 ctx.fillText(
-                    `${genome.accession} | GC: ${genome.gc}% | ${(genome.length / 1e6).toFixed(2)} Mb | ${genome.gene_count} genes`,
-                    marginLeft + 5, y + 16
+                    `${genome.accession} • GC: ${genome.gc}% • ${(genome.length / 1e6).toFixed(2)} Mb`,
+                    x + 20, y + 10
                 )
             }
         })
 
-        // Title
-        ctx.fillStyle = '#334155'
-        ctx.font = 'bold 14px system-ui, sans-serif'
+        // Header Decoration
+        ctx.fillStyle = '#3b82f6'
+        ctx.fillRect(marginLeft, 30, 50, 5)
+        ctx.fillStyle = '#0f172a'
+        ctx.font = '900 18px system-ui, sans-serif'
         ctx.textAlign = 'left'
-        ctx.fillText('Dendrograma UPGMA', marginLeft, 18)
+        ctx.fillText('ANÁLISIS FILOGENÉTICO UPGMA', marginLeft, 60)
 
         // Scale bar
-        const scaleLen = treeW * 0.2
-        const scaleVal = (maxH * 0.2).toFixed(3)
-        const scaleY = displayH - 15
+        const scaleLen = 100
+        const scaleVal = (maxH * (100 / treeW)).toFixed(3)
+        const scaleY = displayH - 50
         ctx.beginPath()
         ctx.strokeStyle = '#64748b'
         ctx.lineWidth = 1.5
         ctx.moveTo(marginLeft, scaleY)
         ctx.lineTo(marginLeft + scaleLen, scaleY)
+        ctx.moveTo(marginLeft, scaleY - 6)
+        ctx.lineTo(marginLeft, scaleY + 6)
+        ctx.moveTo(marginLeft + scaleLen, scaleY - 6)
+        ctx.lineTo(marginLeft + scaleLen, scaleY + 6)
         ctx.stroke()
         ctx.fillStyle = '#64748b'
-        ctx.font = '10px monospace'
+        ctx.font = 'bold 11px font-mono'
         ctx.textAlign = 'center'
-        ctx.fillText(scaleVal, marginLeft + scaleLen / 2, scaleY - 5)
+        ctx.fillText(`${scaleVal} dist.`, marginLeft + scaleLen / 2, scaleY + 25)
 
     }, [data])
 

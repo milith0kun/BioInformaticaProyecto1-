@@ -8,14 +8,32 @@ import { createPluginUI } from 'molstar/lib/mol-plugin-ui/react18';
 import { DefaultPluginUISpec } from 'molstar/lib/mol-plugin-ui/spec';
 import 'molstar/build/viewer/molstar.css';
 
-// Molstar Viewer Component with Enhanced Configuration
+// Internal Molstar Component with strict lifecycle management
 const Molstar = ({ pdbUrl }) => {
   const parentRef = useRef(null);
   const pluginRef = useRef(null);
+  const isInitializing = useRef(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     async function init() {
-      if (!parentRef.current) return;
+      // Prevent concurrent initialization
+      if (!parentRef.current || isInitializing.current) return;
+      isInitializing.current = true;
+
+      // Ensure full cleanup of previous instances
+      if (pluginRef.current) {
+        try {
+          pluginRef.current.dispose();
+        } catch (e) {}
+        pluginRef.current = null;
+      }
+
+      // Absolute clear of container to prevent React 18 root conflicts
+      if (parentRef.current) {
+        parentRef.current.innerHTML = '';
+      }
 
       const spec = DefaultPluginUISpec();
       spec.layout = {
@@ -26,14 +44,18 @@ const Molstar = ({ pdbUrl }) => {
           }
       };
 
-      // Clear container to avoid React 18 createRoot warnings
-      parentRef.current.innerHTML = '';
+      try {
+        const plugin = await createPluginUI(parentRef.current, spec);
+        
+        if (!isMounted) {
+          plugin.dispose();
+          isInitializing.current = false;
+          return;
+        }
 
-      const plugin = await createPluginUI(parentRef.current, spec);
-      pluginRef.current = plugin;
+        pluginRef.current = plugin;
 
-      if (pdbUrl) {
-        try {
+        if (pdbUrl && isMounted) {
           const data = await plugin.builders.data.download(
             { url: pdbUrl, isBinary: false },
             { state: { isGhost: true } }
@@ -52,18 +74,25 @@ const Molstar = ({ pdbUrl }) => {
               ignoreHydrogens: true
             }
           );
-        } catch (err) {
-          console.error('Error loading structure in Molstar:', err);
         }
+      } catch (err) {
+        if (isMounted) console.error('Error loading structure in Molstar:', err);
+      } finally {
+        isInitializing.current = false;
       }
     }
 
-    init();
+    // Delay init slightly to ensure DOM is ready and previous cleanups finished
+    const timer = setTimeout(init, 50);
 
     return () => {
+      isMounted = false;
+      clearTimeout(timer);
       if (pluginRef.current) {
-        pluginRef.current.dispose();
+        const p = pluginRef.current;
         pluginRef.current = null;
+        // Schedule disposal to happen after React's immediate lifecycle
+        setTimeout(() => p.dispose(), 0);
       }
     };
   }, [pdbUrl]);
@@ -72,7 +101,6 @@ const Molstar = ({ pdbUrl }) => {
 };
 
 const PDB_FILE_API = 'https://files.rcsb.org/download'
-const ALPHAFOLD_FILE_API = 'https://alphafold.ebi.ac.uk/files'
 
 export default function MolstarProteinViewer({ proteinId, proteinSequence, productName }) {
   const [loading, setLoading] = useState(false)
@@ -147,6 +175,7 @@ export default function MolstarProteinViewer({ proteinId, proteinSequence, produ
 
   return (
     <div className="space-y-6">
+      {/* HUD de Resolución */}
       {!structureUrl && !loading && (
         <div className="bg-white rounded-[2.5rem] border border-slate-200 p-12 text-center shadow-sm animate-in fade-in zoom-in-95 duration-700">
           <div className="w-28 h-28 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-10 border border-blue-100 relative">
