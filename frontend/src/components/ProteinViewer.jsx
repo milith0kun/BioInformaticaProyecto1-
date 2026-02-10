@@ -190,7 +190,7 @@ export default function ProteinViewer() {
                                                 </div>
                                                 <div className="space-y-1 text-right">
                                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Masa</p>
-                                                    <p className="font-mono text-sm text-slate-900 font-black">{(protein.molecular_weight_approx / 1000).toFixed(1)} <span className="text-[10px] text-slate-400">kDa</span></p>
+                                                    <p className="font-mono text-sm text-slate-900 font-black">{((protein.molecular_weight_approx || 0) / 1000).toFixed(1)} <span className="text-[10px] text-slate-400">kDa</span></p>
                                                 </div>
                                             </div>
                                         </div>

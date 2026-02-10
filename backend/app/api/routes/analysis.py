@@ -90,14 +90,23 @@ async def analyze_codons(request: Request):
         atg_count=result.atg_count,
         atg_density=result.atg_density,
         stop_codons={
-            codon: StopCodonInfo(count=data["count"], percentage=data["percentage"])
+            codon: StopCodonInfo(
+                count=data["count"], 
+                percentage=data["percentage"],
+                density_per_kb=data.get("density_per_kb"),
+                spatial_distribution=data.get("spatial_distribution")
+            )
             for codon, data in result.stop_codons.items()
         },
         gene_comparison=GeneComparison(
             annotated_genes=result.gene_comparison["annotated_genes"],
             atg_found=result.gene_comparison["atg_found"],
-            difference=result.gene_comparison["difference"]
-        )
+            difference=result.gene_comparison["difference"],
+            ratio_atg_to_genes=result.gene_comparison.get("ratio_atg_to_genes"),
+            percent_non_coding=result.gene_comparison.get("percent_non_coding")
+        ),
+        spatial_distribution=result.spatial_distribution,
+        statistical_quality=result.statistical_quality
     )
     
     _analysis_cache["codons"] = response
@@ -164,7 +173,11 @@ async def analyze_genes(request: Request):
                 has_introns=g.get("has_introns", False)
             )
             for g in result.genes
-        ]
+        ],
+        length_distribution=result.length_distribution,
+        strand_distribution=result.strand_distribution,
+        longest_gene=result.longest_gene,
+        shortest_gene=result.shortest_gene
     )
     
     _analysis_cache["genes"] = response
@@ -212,7 +225,9 @@ async def validate_results(request: Request):
             )
             for item in result.items
         ],
-        overall_status=ValidationStatus(result.overall_status.value)
+        overall_status=ValidationStatus(result.overall_status.value),
+        validation_type=result.validation_type,
+        reference_source=result.reference_source
     )
     
     _analysis_cache["validation"] = response
@@ -237,15 +252,7 @@ async def complete_analysis(request: Request):
         
         return {
             "codons": codons,
-            "genes": {
-                "total_genes": genes.total_genes,
-                "total_cds": genes.total_cds,
-                "genome_length": genes.genome_length,
-                "gc_content": genes.gc_content,
-                "gene_density": genes.gene_density,
-                "size_statistics": genes.size_statistics,
-                "genes_count": len(genes.genes)  # Don't return all genes here
-            },
+            "genes": genes,  # Devuelve el objeto completo
             "validation": validation
         }
     except Exception as e:
@@ -274,22 +281,34 @@ async def get_analysis_status():
 
 
 @router.get("/results/codons")
-async def get_codon_results():
+async def get_codon_results(request: Request):
     """
-    Get cached codon analysis results
+    Get cached codon analysis results with auto-recovery
     """
+    global _analysis_cache
     if _analysis_cache["codons"] is None:
-        raise HTTPException(status_code=404, detail="No hay resultados de análisis de codones. Ejecute el análisis primero.")
+        print("🔍 [ANALYSIS] Codon cache empty, attempting auto-run...")
+        try:
+            await analyze_codons(request)
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"No se pudo generar análisis de codones: {str(e)}")
+            
     return _analysis_cache["codons"]
 
 
 @router.get("/results/genes", response_model=PaginatedGenesResponse)
-async def get_gene_results(page: int = 1, page_size: int = 50, search: Optional[str] = None):
+async def get_gene_results(request: Request, page: int = 1, page_size: int = 50, search: Optional[str] = None):
     """
-    Get cached gene analysis results with pagination
+    Get cached gene analysis results with pagination and auto-recovery
     """
+    global _analysis_cache
     if _analysis_cache["genes"] is None:
-        raise HTTPException(status_code=404, detail="No hay resultados de análisis de genes. Ejecute el análisis primero.")
+        print("🔍 [ANALYSIS] Gene cache empty, attempting auto-run...")
+        try:
+            await analyze_genes(request)
+        except Exception as e:
+            print(f"❌ [ANALYSIS] Auto-run failed: {e}")
+            raise HTTPException(status_code=404, detail="Análisis no disponible. Por favor, ejecute el análisis completo.")
     
     genes_result = _analysis_cache["genes"]
     all_genes = genes_result.genes
@@ -300,7 +319,8 @@ async def get_gene_results(page: int = 1, page_size: int = 50, search: Optional[
         all_genes = [
             g for g in all_genes
             if search in g.locus_tag.lower() or 
-               (g.product and search in g.product.lower())
+               (g.product and search in g.product.lower()) or
+               (g.gene_name and search in g.gene_name.lower())
         ]
     
     # Calculate pagination

@@ -30,12 +30,16 @@ class FileListResponse(BaseModel):
 class StopCodonInfo(BaseModel):
     count: int
     percentage: float
+    density_per_kb: Optional[float] = None
+    spatial_distribution: Optional[Dict[str, Any]] = None
 
 
 class GeneComparison(BaseModel):
     annotated_genes: int
     atg_found: int
     difference: int
+    ratio_atg_to_genes: Optional[float] = None
+    percent_non_coding: Optional[float] = None
 
 
 class CodonAnalysisResponse(BaseModel):
@@ -44,6 +48,8 @@ class CodonAnalysisResponse(BaseModel):
     atg_density: float
     stop_codons: Dict[str, StopCodonInfo]
     gene_comparison: GeneComparison
+    spatial_distribution: Optional[Dict[str, Any]] = None
+    statistical_quality: Optional[Dict[str, Any]] = None
 
 
 class SizeStatistics(BaseModel):
@@ -77,6 +83,10 @@ class GeneAnalysisResponse(BaseModel):
     gene_density: float
     size_statistics: SizeStatistics
     genes: List[GeneInfo]
+    length_distribution: Optional[Dict[str, int]] = None
+    strand_distribution: Optional[Dict[str, int]] = None
+    longest_gene: Optional[Dict[str, Any]] = None
+    shortest_gene: Optional[Dict[str, Any]] = None
 
 
 class ValidationItem(BaseModel):
@@ -90,6 +100,8 @@ class ValidationItem(BaseModel):
 class ValidationResponse(BaseModel):
     items: List[ValidationItem]
     overall_status: ValidationStatus
+    validation_type: Optional[str] = "single"
+    reference_source: Optional[str] = ""
 
 
 class CompleteAnalysisResponse(BaseModel):

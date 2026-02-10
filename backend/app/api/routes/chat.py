@@ -39,145 +39,127 @@ class ChatResponse(BaseModel):
 def _get_genome_context(request: Request) -> str:
     """Build comprehensive genome context from ALL available analysis data"""
     from app.api.routes.analysis import _analysis_cache
-
+    
     context_parts = []
-
-    # Current genome info
+    
+    # 1. Active Genome Identification
+    genbank_path = None
     if hasattr(request.app.state, 'ncbi_downloader') and request.app.state.ncbi_downloader.current_genome:
         genome = request.app.state.ncbi_downloader.current_genome
+        genbank_path = genome.filepath
         context_parts.append(f"""
-GENOMA ACTIVO:
+[GENOMA ACTIVO]
 - Accession: {genome.accession}
 - Organismo: {genome.organism_name}
 - Cepa: {genome.strain}
-- Tamaño: {genome.genome_size:,} bp
+- Tamaño: {genome.genome_size:,} pb
 - Genes: {genome.gene_count}
 - GC%: {genome.gc_percent}%
-- Nivel ensamblaje: {genome.assembly_level}
-- Categoría RefSeq: {genome.refseq_category}
-- URL GenBank: https://www.ncbi.nlm.nih.gov/datasets/genome/{genome.accession}/
-- URL Nucleotide: https://www.ncbi.nlm.nih.gov/nuccore/{genome.accession}
+- Nivel: {genome.assembly_level}
+- Categoría: {genome.refseq_category}
+- Enlaces: 
+  * GenBank: https://www.ncbi.nlm.nih.gov/datasets/genome/{genome.accession}/
+  * Nucleotide: https://www.ncbi.nlm.nih.gov/nuccore/{genome.accession}
 """)
 
-    # Analysis results
+    # 2. Gene Analysis (if available)
     if _analysis_cache.get("genes"):
         genes = _analysis_cache["genes"]
         context_parts.append(f"""
-ANÁLISIS DE GENES:
-- Total genes: {genes.total_genes}
-- Total CDS: {genes.total_cds}
-- Longitud genoma: {genes.genome_length:,} bp
-- GC content: {genes.gc_content}%
-- Densidad génica: {genes.gene_density} genes/Mb
-- Tamaño promedio gen: {genes.size_statistics.mean:.0f} bp
-- Desviación estándar: {genes.size_statistics.std:.0f} bp
+[ESTADÍSTICAS GÉNICAS]
+- Total CDS: {genes.total_cds} (Densidad: {genes.gene_density} genes/Mb)
+- Longitud promedio: {genes.size_statistics.mean:.0f} bp (Desv: {genes.size_statistics.std:.0f})
 - Gen más largo: {genes.size_statistics.max:.0f} bp
 - Gen más corto: {genes.size_statistics.min:.0f} bp
+- Distribución hebras: {genes.strand_distribution}
 """)
 
+    # 3. Codon Usage & Bias
     if _analysis_cache.get("codons"):
         codons = _analysis_cache["codons"]
-        stop_info = ""
-        try:
-            stop_codons = codons.stop_codons if hasattr(codons, 'stop_codons') else {}
-            for name, data in stop_codons.items():
-                count = data.count if hasattr(data, 'count') else data.get('count', 'N/A')
-                stop_info += f"  - {name}: {count}\n"
-        except Exception:
-            stop_info = "  - Datos no disponibles\n"
-
         context_parts.append(f"""
-ANÁLISIS DE CODONES:
-- Codones ATG: {codons.atg_count:,}
-- Densidad ATG: {codons.atg_density}/kb
-- Stop codons:
-{stop_info}
-- Genes anotados: {getattr(codons, 'annotated_genes', 'N/A')}
+[USO DE CODONES]
+- Sitios de inicio ATG: {codons.atg_count} ({codons.atg_density}/kb)
+- Codones de parada: {', '.join(f"{k}:{v.count}" for k,v in codons.stop_codons.items())}
 """)
+        
+        # Try to get advanced codon stats (RSCU, Nc, etc)
+        try:
+            if genbank_path:
+                service = get_ncbi_service()
+                codon_full = service.calculate_complete_codon_usage(genbank_path)
+                if "error" not in codon_full:
+                    context_parts.append(f"""
+[BIASED CODON USAGE]
+- Nc (Effective Number of Codons): {codon_full.get('effective_number_of_codons', 'N/A')}
+- GC3s (GC en 3ra posición): {codon_full.get('gc3_content', 'N/A')}%
+- Codones preferidos (Top RSCU): {', '.join(f"{c['codon']}({c['rscu']})" for c in sorted(codon_full.get('codon_table', []), key=lambda x: -x['rscu'])[:3])}
+- Codones raros (Bottom RSCU): {', '.join(f"{c['codon']}({c['rscu']})" for c in sorted(codon_full.get('codon_table', []), key=lambda x: x['rscu'])[:3])}
+""")
+        except Exception:
+            pass
 
-    # Comparison data - ALL genomes
-    if _analysis_cache.get("compared_genomes"):
-        genomes = _analysis_cache["compared_genomes"]
-        comparison_text = f"GENOMAS COMPARADOS ({len(genomes)} genomas):\n"
-        for i, g in enumerate(genomes, 1):
-            comparison_text += f"""
-Genoma #{i}:
-  - Accession: {g.get('accession', 'N/A')}
-  - Organismo: {g.get('organism_name', 'N/A')}
-  - Tamaño: {g.get('genome_length', 0):,} bp
-  - GC content: {g.get('gc_content', 0)}%
-  - Total genes: {g.get('total_genes', 0)}
-  - Densidad génica: {g.get('gene_density', 0)} genes/Mb
-  - URL: https://www.ncbi.nlm.nih.gov/datasets/genome/{g.get('accession', '')}/
-"""
-        context_parts.append(comparison_text)
-
-    # Try to include codon usage summary
+    # 4. Genomic Architecture (GC Window)
     try:
-        genbank_path = None
-        if hasattr(request.app.state, 'file_detector'):
-            genbank_file = request.app.state.file_detector.get_genbank_file()
-            if genbank_file:
-                genbank_path = genbank_file.filepath
-
         if genbank_path:
             service = get_ncbi_service()
-            codon_data = service.calculate_complete_codon_usage(genbank_path)
-            if "error" not in codon_data:
+            # Quick calc of sliding window stats
+            gc_window = service.get_gc_sliding_window(genbank_path, window_size=10000, step=5000)
+            if gc_window and "gc_stats" in gc_window:
+                stats = gc_window["gc_stats"]
                 context_parts.append(f"""
-USO DE CODONES COMPLETO:
-- Total codones analizados: {codon_data.get('total_codons', 0):,}
-- GC3 Content (3ra posición): {codon_data.get('gc3_content', 0)}%
-- Nc (Codones Efectivos, Wright 1990): {codon_data.get('effective_number_of_codons', 0)}
-- Top 5 codones más usados: {', '.join(f"{c['codon']}({c['count']})" for c in sorted(codon_data.get('codon_table', []), key=lambda x: -x['count'])[:5])}
-- Top 5 RSCU más altos: {', '.join(f"{c['codon']}({c['rscu']})" for c in sorted(codon_data.get('codon_table', []), key=lambda x: -x['rscu'])[:5])}
+[ARQUITECTURA GENÓMICA]
+- Variabilidad GC (Ventana 10kb): Min {stats['min_gc']}%, Max {stats['max_gc']}%, Std {stats['std_gc']}
+- GC Skew: Análisis disponible para detectar origen de replicación.
 """)
     except Exception:
         pass
 
-    return "\n".join(context_parts) if context_parts else "No hay genoma activo ni análisis ejecutado."
+    # 5. Comparative Phylogeny
+    if _analysis_cache.get("compared_genomes"):
+        genomes = _analysis_cache["compared_genomes"]
+        if len(genomes) > 1:
+            context_parts.append(f"""
+[CONTEXTO FILOGENÉTICO]
+- Genomas comparados: {len(genomes)}
+- Lista: {', '.join(g.get('organism_name', 'Unknown') for g in genomes[:5])}
+- Método: UPGMA basado en distancias genéticas integradas (GC, Tamaño, Genes, Productos).
+""")
+
+    return "\n".join(context_parts) if context_parts else "No hay genoma activo. El usuario está en la fase de configuración."
 
 
-SYSTEM_PROMPT = """Eres un biólogo molecular y bioinformático experto con PhD en genómica microbiana. Tu nombre es GenomicAI.
+SYSTEM_PROMPT = """Eres el Dr. GenomicAI, un sistema experto en bioinformática y genómica microbiana diseñado para asistir en laboratorios de investigación avanzado.
 
-PERSONALIDAD:
-- Eres entusiasta pero riguroso científicamente
-- Explicas conceptos complejos de forma accesible
-- SIEMPRE citas fuentes y referencias cuando es posible
-- Usas terminología técnica pero la explicas
-- Eres proactivo sugiriendo análisis adicionales
+ROL Y PERSONALIDAD:
+- Actúas como un **Bioinformático Senior** especializado en bacteriología y biología molecular.
+- Tu tono es **profesional, académico y riguroso**, pero accesible.
+- Tienes acceso directo a la base de conocimientos de NCBI (GenBank, RefSeq, PubMed).
+- Eres capaz de correlacionar datos genómicos con fenotipos biológicos (patogenicidad, metabolismo, resistencia).
 
-CAPACIDADES:
-- Conoces en profundidad la genómica bacteriana
-- Puedes interpretar datos de uso de codones, contenido GC, RSCU, Nc, densidad génica
-- Conoces las bases de datos NCBI (GenBank, RefSeq, PubMed, Gene, Protein)
-- Puedes comparar genomas y explicar significancia biológica
-- Entiendes evolución molecular, regulación génica, metabolismo
-- Puedes explicar el dogma central (DNA→mRNA→Proteína), transcripción, traducción
-- Entiendes las hebras 5'→3' y 3'→5', codones, anticodones
+BASE DE CONOCIMIENTO (Contexto Crítico):
+- Tienes acceso al **GENOMA ACTIVO** del usuario (ver abajo). Úsalo para dar respuestas específicas.
+- Entiendes métricas avanzadas: CAI (Codon Adaptation Index), RSCU, Nc (Effective Number of Codons), GC Skew (origen de replicación).
+- Conoces los mecanismos de CRISPR-Cas, operones, regulones y factores sigma.
+- Manejas taxonomía bacteriana y evolución molecular.
 
-INSTRUCCIONES CRÍTICAS:
-1. Responde siempre en español
-2. Usa formato Markdown para estructurar respuestas
-3. **SIEMPRE** incluye referencias y enlaces cuando menciones datos científicos:
-   - Para genes: [nombre_gen en NCBI](https://www.ncbi.nlm.nih.gov/gene/?term=GENE_NAME)
-   - Para proteínas: [protein_id en NCBI](https://www.ncbi.nlm.nih.gov/protein/PROTEIN_ID)
-   - Para genomas: [accession en GenBank](https://www.ncbi.nlm.nih.gov/nuccore/ACCESSION)
-   - Para papers: incluye PMID y enlace a PubMed
-4. Si el usuario pregunta sobre los datos del genoma activo, usa el contexto proporcionado
-5. Sugiere análisis adicionales relevantes
-6. Si no tienes certeza, indícalo honestamente
-7. Para preguntas sobre genes específicos, proporciona contexto funcional
-8. Usa emojis relevantes (🧬🔬📊🧪) con moderación
-9. Cuando hables de procesos biológicos, especifica la dirección (5'→3', N-terminal→C-terminal)
-10. NUNCA inventes PMIDs o referencias. Solo usa las que se proporcionan en el contexto.
+REGLAS DE INTERACCIÓN:
+1. **Evidencia Científica**: Basa tus afirmaciones en principios biológicos sólidos. Si mencionas un gen, describe su función.
+2. **Contextualización**: Si el usuario pregunta "¿Qué significa este GC?", responde usando el GC% real del genoma activo (ej. "El 50.8% de E. coli K-12 indica...").
+3. **Citas NCBI**: Cuando menciones genes o proteínas, asume que existen en NCBI. Sugiere buscar "gen X en NCBI".
+4. **Respuesta Estructurada**:
+   - Usa **Markdown** rico (tablas para comparaciones, negritas para énfasis).
+   - Divide explicaciones complejas en pasos lógicos.
+   - Usa emojis científicos (🧬, 🦠, 🧪, 📊) para mejorar la legibilidad visual.
+5. **Proactividad**: Sugiere qué análisis realizar a continuación (ej. "Dado este alto contenido GC, deberíamos revisar el uso de codones...").
 
-FORMATO DE RESPUESTA:
-- Usa **negrita** para términos importantes
-- Usa listas con viñetas para comparaciones
-- Incluye datos numéricos cuando sean relevantes
-- Si hay referencias, cítalas con formato: [Autor et al., Año](PMID: XXXXX)
-- Incluye enlaces a NCBI cuando mencionas genes, proteínas o genomas"""
+LIMITACIONES:
+- Si no tienes datos del genoma activo, pídele al usuario que cargue uno o ejecute el análisis.
+- No Inventes referencias bibliográficas específicas (título/año) a menos que sean papers clásicos muy conocidos (ej. Watson & Crick 1953, Wright 1990).
+
+IDIOMA:
+- Responde siempre en **ESPAÑOL CIENTÍFICO** estándar.
+"""
 
 
 @router.post("/message")

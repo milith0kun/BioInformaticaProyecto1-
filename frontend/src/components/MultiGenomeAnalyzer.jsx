@@ -251,11 +251,11 @@ export default function MultiGenomeAnalyzer() {
     return comparisonResult.genomes.map((g, i) => ({
       name: g.organism_name?.split(' ').slice(0, 3).join(' ') || g.accession,
       accession: g.accession,
-      size: (g.genome_length / 1000000).toFixed(2),
-      genes: g.gene_count,
-      gc: g.gc_content,
-      density: g.gene_density,
-      avgLength: g.avg_gene_length,
+      size: ((g.genome_length || 0) / 1000000).toFixed(2),
+      genes: g.gene_count || 0,
+      gc: g.gc_content || 0,
+      density: g.gene_density || 0,
+      avgLength: g.avg_gene_length || 0,
       color: COLORS[i % COLORS.length]
     }))
   }, [comparisonResult])
@@ -576,12 +576,12 @@ export default function MultiGenomeAnalyzer() {
                                 <p className="text-xs text-teal-600 font-mono">{g.accession}</p>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-600">{(g.genome_length / 1000000).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{g.gene_count?.toLocaleString()}</td>
-                            <td className="px-4 py-3 text-right font-medium text-emerald-700">{g.gc_content?.toFixed(1)}%</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{g.gene_density?.toFixed(1)}</td>
-                            <td className="px-4 py-3 text-right text-red-600 font-medium">{g.max_gene_length?.toLocaleString()} bp</td>
-                            <td className="px-4 py-3 text-right text-green-600 font-medium">{g.min_gene_length?.toLocaleString()} bp</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{((g.genome_length || 0) / 1000000).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{(g.gene_count || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right font-medium text-emerald-700">{(g.gc_content || 0).toFixed(1)}%</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{(g.gene_density || 0).toFixed(1)}</td>
+                            <td className="px-4 py-3 text-right text-red-600 font-medium">{(g.max_gene_length || 0).toLocaleString()} bp</td>
+                            <td className="px-4 py-3 text-right text-green-600 font-medium">{(g.min_gene_length || 0).toLocaleString()} bp</td>
                           </tr>
                         ))}
                       </tbody>

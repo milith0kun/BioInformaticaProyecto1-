@@ -153,92 +153,81 @@ async def get_genome_info(accession: str, request: Request):
 async def download_genome(download_req: DownloadRequest, request: Request, background_tasks: BackgroundTasks):
     """
     Download a genome from NCBI Datasets API
-    
-    This initiates a background download task.
-    Use /api/genome/download-status/{accession} to check progress.
+    This route is now ultra-defensive to prevent blocking the event loop.
     """
-    downloader = get_downloader(request)
     accession = download_req.accession
     
-    # Check if already downloading
-    if accession in download_status and download_status[accession].get("status") == "downloading":
-        return {
-            "message": "La descarga ya está en progreso",
-            "accession": accession,
-            "status": "downloading"
-        }
-    
-    # Initialize status
+    # 1. Registro inmediato en el mapa de estado
     download_status[accession] = {
         "status": "starting",
-        "message": "Iniciando descarga...",
+        "message": "En cola de procesamiento...",
         "accession": accession
     }
-    
-    def update_status(status: str, message: str):
-        download_status[accession] = {
-            "status": status,
-            "message": message,
-            "accession": accession
-        }
-    
-    def download_task():
-        print(f"🔽 [DOWNLOAD] Iniciando descarga de {accession}")
+
+    # 2. Definimos la tarea pesada de forma aislada
+    def sync_download_wrapper(req_data: dict, state):
         try:
+            # Inicialización tardía del downloader dentro del hilo de fondo
+            print(f"🧵 [THREAD] Iniciando proceso para {accession}")
+            
+            # Recuperamos el downloader (esto puede tardar si el FS es lento)
+            # Pasamos el app state para evitar usar el request object en otro hilo
+            project_root = state.project_root
+            download_dir = os.path.join(project_root, "genomes")
+            api_key = os.environ.get("NCBI_API_KEY")
+            
+            from app.core.ncbi_downloader import NCBIDownloader
+            downloader = NCBIDownloader(download_dir, api_key)
+            
+            def update_cb(status, msg):
+                download_status[accession] = {
+                    "status": status,
+                    "message": msg,
+                    "accession": accession
+                }
+
             result = downloader.download_genome(
                 accession=accession,
-                include_gbff=download_req.include_gbff,
-                include_gff=download_req.include_gff,
-                include_fasta=download_req.include_fasta,
-                include_protein=download_req.include_protein,
-                include_cds=download_req.include_cds,
-                include_rna=download_req.include_rna,
-                callback=update_status
+                include_gbff=req_data['include_gbff'],
+                include_gff=req_data['include_gff'],
+                include_fasta=req_data['include_fasta'],
+                include_protein=req_data['include_protein'],
+                include_cds=req_data['include_cds'],
+                include_rna=req_data['include_rna'],
+                callback=update_cb
             )
-            
-            print(f"🔽 [DOWNLOAD] Resultado para {accession}: success={result.get('success')}")
-            print(f"🔽 [DOWNLOAD] download_dir: {result.get('download_dir')}")
-            print(f"🔽 [DOWNLOAD] files: {result.get('files', [])}")
             
             if result["success"]:
                 download_status[accession] = {
                     "status": "completed",
-                    "message": f"Descarga completada: {len(result['files'])} archivos",
+                    "message": "Listo",
                     "accession": accession,
                     "result": result
                 }
-                print(f"✅ [DOWNLOAD] {accession} completado exitosamente")
-                
-                # Save genome info
-                if result.get("genome_info"):
-                    info_path = os.path.join(result["download_dir"], "genome_info.json")
-                    with open(info_path, 'w') as f:
-                        json.dump(result["genome_info"], f, indent=2)
+                print(f"✅ [THREAD] {accession} completado.")
             else:
-                error_msg = result.get("error", "Error desconocido")
-                print(f"❌ [DOWNLOAD] {accession} falló: {error_msg}")
                 download_status[accession] = {
                     "status": "error",
-                    "message": error_msg,
+                    "message": result.get("error", "Error desconocido"),
                     "accession": accession
                 }
         except Exception as e:
-            print(f"❌ [DOWNLOAD] Error en descarga de {accession}: {str(e)}")
-            import traceback
-            print(f"❌ [DOWNLOAD] Traceback: {traceback.format_exc()}")
+            print(f"🔥 [THREAD] Error crítico: {str(e)}")
             download_status[accession] = {
                 "status": "error",
-                "message": f"Error en descarga: {str(e)}",
+                "message": f"Fallo interno: {str(e)}",
                 "accession": accession
             }
+
+    # 3. Mandamos a segundo plano usando los datos serializados
+    req_dict = download_req.dict()
+    background_tasks.add_task(sync_download_wrapper, req_dict, request.app.state)
     
-    # Add to background tasks
-    background_tasks.add_task(download_task)
-    
+    # 4. Respondemos de inmediato
     return {
-        "message": "Descarga iniciada",
+        "status": "starting",
         "accession": accession,
-        "status": "starting"
+        "message": "Tarea delegada al motor de descargas"
     }
 
 

@@ -1,325 +1,314 @@
 /**
- * RNAAnalysis Component
- * Displays tRNA and rRNA analysis from GenBank file
- * Including amino acid coverage, strand distribution, and gene tables
+ * RNAAnalysis Component — Clean Laboratory Edition
+ * Advanced analysis of tRNA and rRNA genes with charts and detailed categorization.
  */
 import { useState, useEffect, useMemo } from 'react'
-import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, PieChart, Pie, Cell
-} from 'recharts'
 import api from '../services/api'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts'
 
-const COLORS = ['#14b8a6', '#10b981', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6',
-    '#ec4899', '#06b6d4', '#f97316', '#22c55e', '#a855f7', '#3b82f6']
+const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#0f172a']
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">{label}</p>
+        <p className="text-xs font-bold text-white uppercase tracking-tight">
+          Genes: <span className="text-blue-200">{payload[0].value}</span>
+        </p>
+      </div>
+    )
+  }
+  return null
+}
 
 export default function RNAAnalysis() {
-    const [data, setData] = useState(null)
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [viewTab, setViewTab] = useState('overview')
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('summary')
 
-    useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+  }, [])
 
-    const loadData = async () => {
-        setLoading(true)
-        setError(null)
-        try {
-            const result = await api.getRNAAnalysis()
-            setData(result)
-        } catch (e) {
-            setError(e.response?.data?.detail || 'Error cargando datos RNA')
-        } finally {
-            setLoading(false)
-        }
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const result = await api.getRNAAnalysis()
+      setData(result)
+    } catch (e) {
+      console.error("Error cargando análisis de RNA:", e)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    // AA coverage chart data
-    const aaCoverageData = useMemo(() => {
-        if (!data?.amino_acid_coverage) return []
-        return Object.entries(data.amino_acid_coverage)
-            .sort((a, b) => b[1] - a[1])
-            .map(([aa, count]) => ({ aa, count }))
-    }, [data])
+  const coverageChartData = useMemo(() => {
+    if (!data?.amino_acid_coverage) return []
+    return Object.entries(data.amino_acid_coverage)
+      .sort((a, b) => b[1] - a[1])
+      .map(([aa, count]) => ({ name: aa, count }))
+  }, [data])
 
-    // rRNA types chart data
-    const rrnaPieData = useMemo(() => {
-        if (!data?.rrna_types) return []
-        return Object.entries(data.rrna_types).map(([type, count]) => ({ name: type, value: count }))
-    }, [data])
-
-    if (error) {
-        return (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-                <p className="text-amber-700 font-medium">⚠️ {error}</p>
-                <p className="text-amber-600 text-sm mt-2">Active un genoma primero para analizar tRNA/rRNA.</p>
-            </div>
-        )
-    }
-
-    if (loading) {
-        return (
-            <div className="text-center py-16">
-                <div className="w-12 h-12 border-3 border-teal-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-slate-500">Analizando genes tRNA y rRNA...</p>
-            </div>
-        )
-    }
-
-    if (!data) return null
-
+  if (loading && !data) {
     return (
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-xl font-bold text-slate-800">🧪 Análisis de tRNA y rRNA</h2>
-                <p className="text-sm text-slate-500">{data.organism} — {data.total_trna} tRNA, {data.total_rrna} rRNA genes</p>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-2">
-                {[
-                    { id: 'overview', label: 'Resumen', icon: '📊' },
-                    { id: 'trna', label: `tRNA (${data.total_trna})`, icon: '🧬' },
-                    { id: 'rrna', label: `rRNA (${data.total_rrna})`, icon: '🔬' },
-                ].map(t => (
-                    <button key={t.id} onClick={() => setViewTab(t.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewTab === t.id
-                            ? 'bg-teal-600 text-white'
-                            : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-300'
-                            }`}>
-                        {t.icon} {t.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* OVERVIEW */}
-            {viewTab === 'overview' && (
-                <>
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl p-5 text-white">
-                            <p className="text-teal-100 text-sm">Total tRNA</p>
-                            <p className="text-3xl font-bold mt-1">{data.total_trna}</p>
-                        </div>
-                        <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
-                            <p className="text-violet-100 text-sm">Total rRNA</p>
-                            <p className="text-3xl font-bold mt-1">{data.total_rrna}</p>
-                        </div>
-                        <div className="bg-white rounded-xl border border-slate-200 p-5">
-                            <p className="text-xs text-slate-500">Aminoácidos cubiertos</p>
-                            <p className="text-3xl font-bold text-slate-800 mt-1">
-                                {Object.keys(data.amino_acid_coverage).length}
-                                <span className="text-sm font-normal text-slate-400 ml-1">/ 20</span>
-                            </p>
-                        </div>
-                        <div className="bg-white rounded-xl border border-slate-200 p-5">
-                            <p className="text-xs text-slate-500">Tipos rRNA</p>
-                            <p className="text-3xl font-bold text-slate-800 mt-1">{Object.keys(data.rrna_types).length}</p>
-                        </div>
-                    </div>
-
-                    {/* Strand Distribution */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="bg-white rounded-xl border border-slate-200 p-5">
-                            <h3 className="font-semibold text-slate-800 mb-3 text-sm">tRNA por Hebra</h3>
-                            <div className="flex items-center gap-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="w-3 h-3 bg-teal-400 rounded"></span>
-                                        <span className="text-sm text-slate-600">→ 5'→3' Forward</span>
-                                        <span className="ml-auto font-bold text-slate-800">{data.trna_by_strand.forward}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-3 h-3 bg-violet-400 rounded"></span>
-                                        <span className="text-sm text-slate-600">← 3'→5' Reverse</span>
-                                        <span className="ml-auto font-bold text-slate-800">{data.trna_by_strand.reverse}</span>
-                                    </div>
-                                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex mt-3">
-                                        <div className="bg-teal-400 h-full" style={{ width: `${(data.trna_by_strand.forward / data.total_trna * 100)}%` }}></div>
-                                        <div className="bg-violet-400 h-full" style={{ width: `${(data.trna_by_strand.reverse / data.total_trna * 100)}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-xl border border-slate-200 p-5">
-                            <h3 className="font-semibold text-slate-800 mb-3 text-sm">rRNA por Hebra</h3>
-                            <div className="flex items-center gap-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="w-3 h-3 bg-teal-400 rounded"></span>
-                                        <span className="text-sm text-slate-600">→ 5'→3' Forward</span>
-                                        <span className="ml-auto font-bold text-slate-800">{data.rrna_by_strand.forward}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-3 h-3 bg-violet-400 rounded"></span>
-                                        <span className="text-sm text-slate-600">← 3'→5' Reverse</span>
-                                        <span className="ml-auto font-bold text-slate-800">{data.rrna_by_strand.reverse}</span>
-                                    </div>
-                                    {data.total_rrna > 0 && (
-                                        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex mt-3">
-                                            <div className="bg-teal-400 h-full" style={{ width: `${(data.rrna_by_strand.forward / data.total_rrna * 100)}%` }}></div>
-                                            <div className="bg-violet-400 h-full" style={{ width: `${(data.rrna_by_strand.reverse / data.total_rrna * 100)}%` }}></div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* AA Coverage */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-5">
-                        <h3 className="font-semibold text-slate-800 mb-1">Cobertura de Aminoácidos por tRNA</h3>
-                        <p className="text-xs text-slate-500 mb-4">Número de genes tRNA para cada aminoácido. Los aminoácidos más comunes tienen más copias de tRNA.</p>
-                        <ResponsiveContainer width="100%" height={280}>
-                            <BarChart data={aaCoverageData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                <XAxis dataKey="aa" tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} />
-                                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
-                                <Tooltip
-                                    formatter={(value) => [value, 'Genes tRNA']}
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                                />
-                                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                                    {aaCoverageData.map((_, i) => (
-                                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* rRNA Types Pie */}
-                    {rrnaPieData.length > 0 && (
-                        <div className="bg-white rounded-xl border border-slate-200 p-5">
-                            <h3 className="font-semibold text-slate-800 mb-4">Tipos de rRNA</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <PieChart>
-                                        <Pie data={rrnaPieData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                                            outerRadius={90} innerRadius={50} paddingAngle={3}>
-                                            {rrnaPieData.map((_, i) => (
-                                                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div className="space-y-2 flex flex-col justify-center">
-                                    {rrnaPieData.map((r, i) => (
-                                        <div key={i} className="flex items-center gap-3 text-sm">
-                                            <span className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
-                                            <span className="text-slate-700">{r.name}</span>
-                                            <span className="ml-auto font-bold text-slate-800">{r.value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </>
-            )}
-
-            {/* tRNA TABLE */}
-            {viewTab === 'trna' && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="font-semibold text-slate-800 mb-4">
-                        Genes tRNA ({data.total_trna})
-                    </h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Locus</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Producto</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Aminoácido</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Inicio</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Fin</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Longitud</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Hebra</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.trna_genes.map((trna, i) => (
-                                    <tr key={i} className={`border-b border-slate-100 ${i % 2 === 0 ? '' : 'bg-slate-50/50'}`}>
-                                        <td className="px-3 py-2 font-mono text-xs">{trna.locus_tag}</td>
-                                        <td className="px-3 py-2 text-xs">{trna.product}</td>
-                                        <td className="px-3 py-2 font-medium text-teal-700">{trna.amino_acid}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{trna.start.toLocaleString()}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{trna.end.toLocaleString()}</td>
-                                        <td className="px-3 py-2 text-xs">{trna.length} bp</td>
-                                        <td className="px-3 py-2">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium ${trna.strand === 1
-                                                ? 'bg-teal-50 text-teal-600'
-                                                : 'bg-violet-50 text-violet-600'
-                                                }`}>
-                                                {trna.strand === 1 ? '→ 5\'→3\'' : '← 3\'→5\''}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* rRNA TABLE */}
-            {viewTab === 'rrna' && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="font-semibold text-slate-800 mb-4">
-                        Genes rRNA ({data.total_rrna})
-                    </h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Locus</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Producto</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Inicio</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Fin</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Longitud</th>
-                                    <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Hebra</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.rrna_genes.map((rrna, i) => (
-                                    <tr key={i} className={`border-b border-slate-100 ${i % 2 === 0 ? '' : 'bg-slate-50/50'}`}>
-                                        <td className="px-3 py-2 font-mono text-xs">{rrna.locus_tag}</td>
-                                        <td className="px-3 py-2 text-xs font-medium text-violet-700">{rrna.product}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{rrna.start.toLocaleString()}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{rrna.end.toLocaleString()}</td>
-                                        <td className="px-3 py-2 text-xs">{rrna.length.toLocaleString()} bp</td>
-                                        <td className="px-3 py-2">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium ${rrna.strand === 1
-                                                ? 'bg-teal-50 text-teal-600'
-                                                : 'bg-violet-50 text-violet-600'
-                                                }`}>
-                                                {rrna.strand === 1 ? '→ 5\'→3\'' : '← 3\'→5\''}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Info */}
-            <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                <div className="flex gap-3">
-                    <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="text-sm text-teal-800 space-y-1">
-                        <p><strong>tRNA</strong>: RNA de transferencia — transporta aminoácidos al ribosoma durante la traducción. Cada tRNA reconoce un codón específico del mRNA mediante apareamiento de bases con su anticodón.</p>
-                        <p><strong>rRNA</strong>: RNA ribosomal — componente estructural y catalítico de los ribosomas. En procariotas: 5S, 16S y 23S rRNA. El 16S rRNA es la base de la taxonomía bacteriana.</p>
-                        <p className="text-xs text-teal-700">Los genomas bacterianos típicos tienen 1-15 operones rRNA y 60-90 genes tRNA.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div className="flex flex-col items-center justify-center py-48">
+        <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
+        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em] animate-pulse">Analizando Transcripción...</p>
+      </div>
     )
+  }
+
+  if (!data) return null
+
+  return (
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 bg-white p-10 rounded-[3rem] border-2 border-slate-100 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] -mr-32 -mt-32"></div>
+        <div className="space-y-4 relative z-10">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
+            Análisis de <span className="text-blue-600">tRNA y rRNA</span>
+          </h2>
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="px-4 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-blue-100 shadow-sm">
+              {data.organism || 'Genoma en Análisis'}
+            </span>
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest italic">
+              {data.total_trna} tRNA, {data.total_rrna} genes rRNA detectados
+            </p>
+          </div>
+        </div>
+        
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 relative z-10">
+          {[
+            { id: 'summary', label: 'Resumen', icon: '📊' },
+            { id: 'trna', label: `tRNA (${data.total_trna})`, icon: '🧬' },
+            { id: 'rrna', label: `rRNA (${data.total_rrna})`, icon: '🔬' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'summary' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {/* Executive Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000"></div>
+              <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-3">Total tRNA</p>
+              <p className="text-4xl font-black tracking-tighter">{data.total_trna}</p>
+            </div>
+            <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm hover:border-blue-200 transition-all">
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3">Total rRNA</p>
+              <p className="text-4xl font-black text-slate-900 tracking-tighter">{data.total_rrna}</p>
+            </div>
+            <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm hover:border-blue-200 transition-all">
+              <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-3">AA Cubiertos</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-4xl font-black text-blue-600 tracking-tighter">{Object.keys(data.amino_acid_coverage || {}).length}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">/ 20</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm hover:border-blue-200 transition-all">
+              <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-3">Tipos rRNA</p>
+              <p className="text-4xl font-black text-indigo-600 tracking-tighter">{Object.keys(data.rrna_types || {}).length}</p>
+            </div>
+          </div>
+
+          {/* Strand Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">tRNA por Hebra</h3>
+              <div className="grid grid-cols-2 gap-8">
+                <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex flex-col items-center">
+                  <p className="text-[9px] font-black text-blue-600 uppercase mb-2">→ 5'→3' Forward</p>
+                  <p className="text-4xl font-black text-slate-900">{data.trna_by_strand?.forward || 0}</p>
+                </div>
+                <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 flex flex-col items-center">
+                  <p className="text-[9px] font-black text-indigo-600 uppercase mb-2">← 3'→5' Reverse</p>
+                  <p className="text-4xl font-black text-slate-900">{data.trna_by_strand?.reverse || 0}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">rRNA por Hebra</h3>
+              <div className="grid grid-cols-2 gap-8">
+                <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col items-center">
+                  <p className="text-[9px] font-black text-emerald-600 uppercase mb-2">→ 5'→3' Forward</p>
+                  <p className="text-4xl font-black text-slate-900">{data.rrna_by_strand?.forward || 0}</p>
+                </div>
+                <div className="p-6 bg-rose-50 rounded-2xl border border-rose-100 flex flex-col items-center">
+                  <p className="text-[9px] font-black text-rose-600 uppercase mb-2">← 3'→5' Reverse</p>
+                  <p className="text-4xl font-black text-slate-900">{data.rrna_by_strand?.reverse || 0}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Cobertura Chart */}
+          <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+            <div className="mb-10 text-center">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Cobertura de Aminoácidos por tRNA</h3>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Número de genes tRNA identificados para cada residuo</p>
+            </div>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={coverageChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#475569' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={24}>
+                  {coverageChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Technical Info & Legend */}
+          <div className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl shadow-blue-900/20 space-y-12 overflow-hidden relative">
+            <div className="absolute bottom-0 right-0 p-12 opacity-5 pointer-events-none text-9xl font-black italic">RNA</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
+              <div className="space-y-4">
+                <h5 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Conceptos de tRNA</h5>
+                <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                  <span className="text-white font-bold block mb-1">RNA de transferencia (tRNA):</span> Transporta aminoácidos específicos al ribosoma durante la traducción. Cada tRNA reconoce un codón del mRNA mediante su anticodón. Los genomas bacterianos suelen optimizar el número de copias según la abundancia de codones.
+                </p>
+              </div>
+              <div className="space-y-4 border-l border-white/5 pl-8">
+                <h5 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Conceptos de rRNA</h5>
+                <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                  <span className="text-white font-bold block mb-1">RNA Ribosomal (rRNA):</span> Componente estructural clave del ribosoma. En procariotas, se organiza en operones que contienen las subunidades 5S, 16S y 23S. La secuencia del 16S es el estándar de oro para la filogenia bacteriana.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'trna' && (
+        <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm animate-in zoom-in-95 duration-500">
+          <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Inventario Detallado de tRNA</h3>
+            <span className="px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded-full shadow-lg">{data.total_trna} Genes</span>
+          </div>
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left">
+              <thead className="bg-white sticky top-0 z-10 border-b border-slate-100">
+                <tr>
+                  <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Identificador</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Aminoácido</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Anticodón / Nota</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Inicio</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Extensión</th>
+                  <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Hebra</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {data.trna_genes?.map((gene, i) => (
+                  <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-10 py-5 font-mono text-xs font-black text-slate-900 group-hover:text-blue-600 uppercase">{gene.locus_tag || `trna-${i+1}`}</td>
+                    <td className="px-6 py-5">
+                      <span className="text-[10px] font-black text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">{gene.amino_acid}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="text-[10px] text-slate-600 font-bold uppercase truncate max-w-[200px]">{gene.product || gene.anticodon}</p>
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono text-[10px] font-bold text-slate-500">{gene.start.toLocaleString()}</td>
+                    <td className="px-6 py-5 text-right font-mono text-xs font-black text-slate-900">{gene.length} pb</td>
+                    <td className="px-10 py-5 text-center">
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border ${gene.strand === 1 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}>
+                        {gene.strand === 1 ? '→ 5\'→3\'' : '← 3\'→5\''}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'rrna' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in zoom-in-95 duration-500">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">Distribución de Copias</h3>
+              <div className="space-y-4">
+                {Object.entries(data.rrna_types || {}).map(([type, count]) => (
+                  <div key={type} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:border-blue-200 transition-all shadow-sm">
+                    <div>
+                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{type.replace('ribosomal RNA', '').trim()}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Subunidad</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-2xl font-black text-blue-600">{count}</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 group-hover:animate-ping shadow-sm"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+            <div className="p-8 border-b border-slate-50 bg-slate-50/30">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Localización Genómica de rRNA</h3>
+            </div>
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left">
+                <thead className="bg-white sticky top-0 z-10 border-b border-slate-100">
+                  <tr>
+                    <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Tipo</th>
+                    <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Inicio</th>
+                    <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Extensión</th>
+                    <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Hebra</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {data.rrna_genes?.map((gene, i) => (
+                    <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                      <td className="px-10 py-5">
+                        <p className="text-[10px] font-black text-slate-900 uppercase leading-tight">{gene.product}</p>
+                        <p className="text-[9px] font-bold text-blue-600 uppercase font-mono mt-1">{gene.locus_tag}</p>
+                      </td>
+                      <td className="px-6 py-5 text-right font-mono text-[10px] font-bold text-slate-600">{gene.start.toLocaleString()}</td>
+                      <td className="px-6 py-5 text-right font-mono text-xs font-black text-slate-900">{gene.length.toLocaleString()} pb</td>
+                      <td className="px-10 py-5 text-center">
+                        <span className={`text-[9px] font-black px-3 py-1 rounded-full border ${gene.strand === 1 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}>
+                          {gene.strand === 1 ? '→ 5\'→3\'' : '← 3\'→5\''}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

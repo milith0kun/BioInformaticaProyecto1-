@@ -1,5 +1,6 @@
 /**
- * ComparisonResults - Muestra resultados de comparación de múltiples genomas
+ * ComparisonResults Component — Clean Laboratory Edition
+ * Comprehensive multi-genome analysis with high-fidelity charts and metrics
  */
 import { useMemo } from 'react'
 import {
@@ -10,135 +11,181 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Cell
 } from 'recharts'
 
-const COLORS = ['#0d9488', '#10b981', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#0f172a', '#64748b', '#3b82f6', '#6366f1']
 
-export default function ComparisonResults({ comparisonResult, selectedGenomes }) {
-  // Preparar datos para gráficos
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">{label}</p>
+        {payload.map((entry, index) => (
+          <div key={index} className="flex items-center gap-3">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }}></div>
+            <p className="text-xs font-bold text-white uppercase tracking-tight">
+              {entry.name}: <span className="text-blue-200">{entry.value}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
+
+const TechnicalChart = ({ title, data, dataKey, layout = "vertical", domain }) => (
+  <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm transition-all hover:border-blue-200">
+    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-10 text-center">{title}</h4>
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={data} layout={layout}>
+        <CartesianGrid strokeDasharray="3 3" vertical={layout === 'horizontal'} horizontal={layout === 'vertical'} stroke="#f1f5f9" />
+        <XAxis 
+          type={layout === 'vertical' ? 'number' : 'category'} 
+          dataKey={layout === 'vertical' ? undefined : 'name'}
+          axisLine={false} 
+          tickLine={false} 
+          tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }} 
+        />
+        <YAxis 
+          type={layout === 'vertical' ? 'category' : 'number'}
+          dataKey={layout === 'vertical' ? 'name' : undefined}
+          axisLine={false} 
+          tickLine={false} 
+          tick={{ fontSize: 9, fontWeight: 900, fill: '#1e293b' }} 
+          width={layout === 'vertical' ? 100 : 40}
+          domain={domain}
+        />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+        <Bar dataKey={dataKey} radius={layout === 'vertical' ? [0, 8, 8, 0] : [8, 8, 0, 0]} barSize={layout === 'vertical' ? 12 : 24}>
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+)
+
+export default function ComparisonResults({ comparisonResult }) {
   const chartData = useMemo(() => {
     if (!comparisonResult?.genomes) return []
-    return comparisonResult.genomes.map((g, i) => ({
-      name: g.organism_name?.split(' ').slice(0, 2).join(' ') || g.accession.substring(0, 15),
-      accession: g.accession,
-      'Tamaño (Mb)': (g.genome_length / 1000000).toFixed(2),
-      'Genes': g.gene_count,
-      'GC%': g.gc_content?.toFixed(1),
-      'Densidad': g.gene_density?.toFixed(1),
-      'Gen más largo': g.max_gene_length,
-      'Gen más corto': g.min_gene_length,
-      color: COLORS[i % COLORS.length]
+    return comparisonResult.genomes.map((g) => ({
+      name: g.organism_name?.split(' ').slice(0, 2).join(' ') || g.accession?.substring(0, 10),
+      full_name: g.organism_name,
+      'Tamaño (Mb)': parseFloat(((g.genome_length || 0) / 1e6).toFixed(2)),
+      'Genes': g.gene_count || 0,
+      'GC%': parseFloat(g.gc_content?.toFixed(1) || 0),
+      'Densidad': parseFloat(g.gene_density?.toFixed(1) || 0),
     }))
   }, [comparisonResult])
 
   if (!comparisonResult) {
     return (
-      <div className="text-center py-12 text-slate-500">
-        <p>No hay datos de comparación disponibles</p>
-        <p className="text-sm mt-1">Selecciona múltiples genomas y ejecuta el análisis</p>
+      <div className="flex flex-col items-center justify-center py-48">
+        <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizando Dataset...</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Resumen */}
-      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">Análisis Comparativo</h2>
-            <p className="text-teal-100">
-              {comparisonResult.total_genomes_compared} genomas analizados • {comparisonResult.comparison_date}
-            </p>
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Executive Summary Header */}
+      <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-blue-900/20">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] -mr-32 -mt-32"></div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
+          <div className="space-y-3">
+            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-blue-400">Análisis Comparativo</h2>
+            <div className="flex items-center gap-4">
+              <span className="px-4 py-1.5 bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-blue-500/20">
+                {comparisonResult.total_genomes_compared} Cepas Analizadas
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {comparisonResult.comparison_date ? new Date(comparisonResult.comparison_date).toLocaleString() : 'Live Session'}
+              </span>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-4xl font-bold">{comparisonResult.total_genomes_compared}</div>
-            <div className="text-teal-100 text-sm">genomas</div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <div className="text-6xl font-black tracking-tighter text-white">{comparisonResult.total_genomes_compared}</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-blue-500">Genomas</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Métricas extremas */}
-      {comparisonResult.extremes && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Más Grande</p>
-            <p className="text-sm font-bold text-red-600 mt-1 truncate">{comparisonResult.extremes.largest_genome}</p>
+      {/* Extreme Metrics Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: 'Más Grande', val: comparisonResult.extremes.largest_genome, icon: '🐘' },
+          { label: 'Más Pequeño', val: comparisonResult.extremes.smallest_genome, icon: '🔬' },
+          { label: 'Mayor GC%', val: comparisonResult.extremes.highest_gc, icon: '🔝' },
+          { label: 'Menor GC%', val: comparisonResult.extremes.lowest_gc, icon: '📉' },
+          { label: 'Máx Densidad', val: comparisonResult.extremes.highest_gene_density, icon: '🧬' },
+          { label: 'Mín Densidad', val: comparisonResult.extremes.lowest_gene_density, icon: '🌫️' }
+        ].map((item, i) => (
+          <div key={i} className="bg-white border-2 border-slate-100 rounded-[2rem] p-6 shadow-sm hover:border-blue-200 transition-all group overflow-hidden relative">
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-5 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{item.icon}</div>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 leading-none">{item.label}</p>
+            <p className="text-xs font-black text-slate-900 truncate tracking-tight uppercase italic">{item.val}</p>
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Más Pequeño</p>
-            <p className="text-sm font-bold text-green-600 mt-1 truncate">{comparisonResult.extremes.smallest_genome}</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Mayor GC%</p>
-            <p className="text-sm font-bold text-purple-600 mt-1 truncate">{comparisonResult.extremes.highest_gc}</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Menor GC%</p>
-            <p className="text-sm font-bold text-orange-600 mt-1 truncate">{comparisonResult.extremes.lowest_gc}</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Mayor Densidad</p>
-            <p className="text-sm font-bold text-blue-600 mt-1 truncate">{comparisonResult.extremes.highest_gene_density}</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-500 uppercase font-medium">Menor Densidad</p>
-            <p className="text-sm font-bold text-slate-600 mt-1 truncate">{comparisonResult.extremes.lowest_gene_density}</p>
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Tabla comparativa */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="font-bold text-slate-800">📊 Comparación Detallada</h3>
+      {/* Detailed Matrix Table */}
+      <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+        <div className="p-10 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">📊 Comparación Detallada</h3>
+          <div className="flex gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse [animation-delay:200ms]"></div>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white border-b border-slate-100">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase">Organismo</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Tamaño</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Genes</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">GC%</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Densidad</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Gen Mayor</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Gen Menor</th>
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Organismo</th>
+                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Tamaño</th>
+                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Genes</th>
+                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GC%</th>
+                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Densidad</th>
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Gen Mayor / Menor</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-50">
               {comparisonResult.genomes?.map((g, i) => (
-                <tr key={g.accession} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full flex-shrink-0" 
-                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                      />
+                <tr key={g.accession} className="hover:bg-slate-50/80 transition-colors group">
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-5">
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xs shadow-lg group-hover:rotate-6 transition-all" style={{ backgroundColor: COLORS[i % COLORS.length] }}>
+                        {g.organism_name?.charAt(0) || 'G'}
+                      </div>
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">{g.organism_name || g.accession}</p>
-                        <p className="text-xs text-teal-600 font-mono">{g.accession}</p>
+                        <p className="font-black text-slate-900 text-xs uppercase tracking-tighter leading-tight max-w-[200px] line-clamp-1">{g.organism_name}</p>
+                        <p className="text-[10px] text-blue-600 font-mono tracking-widest font-black mt-1 uppercase">{g.accession}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-600">
-                    {(g.genome_length / 1000000).toFixed(2)} Mb
+                  <td className="px-6 py-6 text-right font-mono text-xs font-black text-slate-600 italic">
+                    {((g.genome_length || 0) / 1e6).toFixed(2)} <span className="text-[9px] text-slate-400">Mb</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-600">
+                  <td className="px-6 py-6 text-right font-mono text-xs font-black text-slate-600">
                     {g.gene_count?.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-emerald-700">
+                  <td className="px-6 py-6 text-right font-mono text-xs font-black text-blue-600">
                     {g.gc_content?.toFixed(1)}%
                   </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-600">
-                    {g.gene_density?.toFixed(1)} g/Mb
+                  <td className="px-6 py-6 text-right font-mono text-xs font-black text-slate-400">
+                    {g.gene_density?.toFixed(1)} <span className="text-[9px]">g/Mb</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-sm text-red-600 font-medium">
-                    {g.max_gene_length?.toLocaleString()} bp
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-green-600 font-medium">
-                    {g.min_gene_length?.toLocaleString()} bp
+                  <td className="px-10 py-6 text-right">
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-[10px] font-black text-slate-700">{g.max_gene_length?.toLocaleString()} pb</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter border-t border-slate-100 pt-1">{g.min_gene_length?.toLocaleString()} pb</span>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -147,114 +194,71 @@ export default function ComparisonResults({ comparisonResult, selectedGenomes })
         </div>
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tamaño del genoma */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h4 className="font-bold text-slate-800 mb-4">Tamaño del Genoma (Mb)</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Bar dataKey="Tamaño (Mb)" fill="#0d9488" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Número de genes */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h4 className="font-bold text-slate-800 mb-4">Número de Genes</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Bar dataKey="Genes" fill="#10b981" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Contenido GC */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h4 className="font-bold text-slate-800 mb-4">Contenido GC (%)</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-              <YAxis domain={['dataMin - 2', 'dataMax + 2']} />
-              <Tooltip />
-              <Bar dataKey="GC%" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Densidad génica */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h4 className="font-bold text-slate-800 mb-4">Densidad Génica (genes/Mb)</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="Densidad" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Multi-Grid Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <TechnicalChart title="Extensión Genómica (Mb)" data={chartData} dataKey="Tamaño (Mb)" layout="vertical" />
+        <TechnicalChart title="Número de Genes (CDS)" data={chartData} dataKey="Genes" layout="vertical" />
+        <TechnicalChart title="Contenido GC (%)" data={chartData} dataKey="GC%" layout="horizontal" domain={['dataMin - 5', 'dataMax + 5']} />
+        <TechnicalChart title="Densidad Génica (g/Mb)" data={chartData} dataKey="Densidad" layout="horizontal" />
       </div>
 
-      {/* Genes extremos globales */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Genes más largos */}
-        {comparisonResult.longest_genes_global && comparisonResult.longest_genes_global.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-red-50 to-orange-50">
-              <h4 className="font-bold text-slate-800">📏 Genes Más Largos (Global)</h4>
-              <p className="text-xs text-slate-500">Top 10 genes más largos de todos los genomas</p>
-            </div>
-            <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-              {comparisonResult.longest_genes_global.map((gene, i) => (
-                <div key={i} className="p-3 hover:bg-slate-50">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-sm text-teal-700">{gene.locus_tag}</span>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">{gene.product}</p>
-                      <p className="text-xs text-slate-400">{gene.genome}</p>
+      {/* Global Extremes: Longest and Shortest Genes */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+        {/* Longest Genes Global */}
+        <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+          <div className="p-10 border-b border-slate-100 bg-gradient-to-br from-slate-900 to-blue-900 text-white relative">
+            <div className="absolute top-0 right-0 p-8 opacity-10"><span className="text-6xl text-white">📏</span></div>
+            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 text-blue-400">Genes Más Largos (Global)</h4>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Top 10 Macro-estructuras detectadas</p>
+          </div>
+          <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {comparisonResult.longest_genes_global?.map((gene, i) => (
+              <div key={i} className="p-8 hover:bg-blue-50/30 transition-all group flex items-center justify-between gap-6">
+                <div className="flex items-center gap-6 flex-1 min-w-0">
+                  <div className="text-lg font-black text-slate-200 group-hover:text-blue-200 transition-colors">{(i + 1).toString().padStart(2, '0')}</div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-black text-slate-900 group-hover:text-blue-600 transition-colors truncate uppercase italic">{gene.gene_name || gene.locus_tag || 'Unknown'}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1 truncate">{gene.product || 'Proteína funcional'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[9px] font-black text-blue-500 uppercase px-2 py-0.5 bg-blue-50 rounded border border-blue-100">{gene.genome}</span>
                     </div>
-                    <span className="font-bold text-red-600 ml-2">{gene.length?.toLocaleString()} bp</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-lg font-black text-slate-900 tracking-tighter italic">{gene.length?.toLocaleString()} <span className="text-[10px] text-slate-400 not-italic uppercase font-bold">pb</span></p>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Genes más cortos */}
-        {comparisonResult.shortest_genes_global && comparisonResult.shortest_genes_global.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-green-50 to-teal-50">
-              <h4 className="font-bold text-slate-800">🔬 Genes Más Cortos (Global)</h4>
-              <p className="text-xs text-slate-500">Top 10 genes más cortos de todos los genomas</p>
-            </div>
-            <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-              {comparisonResult.shortest_genes_global.map((gene, i) => (
-                <div key={i} className="p-3 hover:bg-slate-50">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-sm text-teal-700">{gene.locus_tag}</span>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">{gene.product}</p>
-                      <p className="text-xs text-slate-400">{gene.genome}</p>
+        {/* Shortest Genes Global */}
+        <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+          <div className="p-10 border-b border-slate-100 bg-slate-50 relative">
+            <div className="absolute top-0 right-0 p-8 opacity-10"><span className="text-6xl text-slate-900">🔬</span></div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Genes Más Cortos (Global)</h4>
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Top 10 Micro-secuencias codificantes</p>
+          </div>
+          <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {comparisonResult.shortest_genes_global?.map((gene, i) => (
+              <div key={i} className="p-8 hover:bg-slate-50 transition-all group flex items-center justify-between gap-6">
+                <div className="flex items-center gap-6 flex-1 min-w-0">
+                  <div className="text-lg font-black text-slate-200 group-hover:text-slate-400 transition-colors">{(i + 1).toString().padStart(2, '0')}</div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-black text-slate-900 group-hover:text-slate-700 transition-colors truncate uppercase italic">{gene.gene_name || gene.locus_tag || 'Unknown'}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1 truncate">{gene.product || 'Micro-proteína hipotética'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[9px] font-black text-slate-500 uppercase px-2 py-0.5 bg-slate-100 rounded border border-slate-200">{gene.genome}</span>
                     </div>
-                    <span className="font-bold text-green-600 ml-2">{gene.length?.toLocaleString()} bp</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-lg font-black text-slate-900 tracking-tighter italic">{gene.length?.toLocaleString()} <span className="text-[10px] text-slate-400 not-italic uppercase font-bold">pb</span></p>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   )

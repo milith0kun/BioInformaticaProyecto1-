@@ -125,108 +125,110 @@ function App() {
       return
     }
 
+    console.log('🚀 [ANALYSIS] Iniciando para:', selectedGenomes)
     setIsLoading(true)
     const failedGenomes = []
     const successfulGenomes = []
 
     try {
-      // Flujo unificado: descargar genomas y comparar (funciona para 1 o más genomas)
-      toast.loading(`Descargando ${selectedGenomes.length} genoma${selectedGenomes.length > 1 ? 's' : ''}...`, { id: 'analysis' })
+      toast.loading(`Sincronizando ${selectedGenomes.length} genoma${selectedGenomes.length > 1 ? 's' : ''}...`, { id: 'analysis' })
 
-      // Descargar todos los genomas seleccionados
       for (let i = 0; i < selectedGenomes.length; i++) {
         const accession = selectedGenomes[i]
+        console.log(`📂 [${i+1}/${selectedGenomes.length}] Procesando: ${accession}`)
 
-        // Verificar si ya está descargado
         const isAlreadyDownloaded = downloadedGenomes.some(g => g.accession === accession)
 
         if (isAlreadyDownloaded) {
-          toast.loading(`Genoma ${i + 1}/${selectedGenomes.length} ya descargado ✓`, { id: 'analysis', duration: 1000 })
+          console.log(`✅ [${accession}] Ya disponible localmente.`)
           successfulGenomes.push(accession)
-          continue // Saltar al siguiente
+          toast.loading(`Genoma ${i + 1}/${selectedGenomes.length} listo ✓`, { id: 'analysis' })
+          continue
         }
 
-        toast.loading(`Descargando genoma ${i + 1}/${selectedGenomes.length}: ${accession}...`, { id: 'analysis' })
+        toast.loading(`Descargando ${accession} desde NCBI...`, { id: 'analysis' })
 
         try {
-          // Iniciar descarga
-          await api.downloadGenome({
+          console.log(`📡 [${accession}] Solicitando descarga...`)
+          const initResponse = await api.downloadGenome({
             accession: accession,
             include_gbff: true,
             include_gff: true,
             include_fasta: true
           })
+          console.log(`📥 [${accession}] Respuesta de inicio:`, initResponse)
 
-          // Esperar a que la descarga termine
           let downloadComplete = false
           let attempts = 0
-          const maxAttempts = 60 // 60 segundos máximo por genoma
+          const maxAttempts = 120 // Aumentamos a 2 minutos para genomas grandes
 
+          console.log(`⏳ [${accession}] Iniciando polling de estado...`)
           while (!downloadComplete && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
+            await new Promise(resolve => setTimeout(resolve, 1500)) // Esperar 1.5s entre encuestas
+            
             const status = await api.getGenomeDownloadStatus(accession)
+            console.log(`📊 [${accession}] Intento ${attempts + 1}: ${status.status} - ${status.message}`)
+
             if (status.status === 'completed') {
               downloadComplete = true
               successfulGenomes.push(accession)
-              toast.loading(`Genoma ${i + 1}/${selectedGenomes.length} descargado ✓`, { id: 'analysis' })
+              toast.loading(`${accession} descargado con éxito ✓`, { id: 'analysis' })
             } else if (status.status === 'error') {
-              throw new Error(status.message || 'Error en descarga')
+              throw new Error(status.message || 'Error en servidor NCBI')
             }
             attempts++
           }
 
           if (!downloadComplete) {
-            throw new Error(`Timeout descargando ${accession}`)
+            throw new Error(`Tiempo de espera agotado para ${accession}`)
           }
         } catch (downloadError) {
-          console.warn(`Error descargando ${accession}:`, downloadError)
+          console.error(`❌ [${accession}] Falló la descarga:`, downloadError)
           failedGenomes.push({ accession, error: downloadError.message })
-          toast.error(`${accession} falló: ${downloadError.message.substring(0, 50)}...`, { duration: 4000 })
+          toast.error(`${accession} falló: ${downloadError.message.substring(0, 40)}...`, { duration: 4000 })
         }
       }
 
-      toast.loading('Ejecutando análisis comparativo...', { id: 'analysis' })
+      if (successfulGenomes.length === 0) {
+        throw new Error('No se pudo descargar ningún genoma para el análisis.')
+      }
 
-      // Esperar 2 segundos adicionales para asegurar que los archivos estén listos
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      console.log('🧪 [ANALYSIS] Genomas exitosos:', successfulGenomes)
+      toast.loading('Ejecutando motores de comparación...', { id: 'analysis' })
 
-      // Comparar solo los genomas exitosos
+      // Comparar genomas
       const comparison = await api.compareGenomes(successfulGenomes)
       setComparisonResult(comparison)
+      console.log('📊 [ANALYSIS] Comparación completada.')
 
-      // Siempre activar el último genoma exitoso para análisis detallado (Dashboard, Codones, Genes, etc.)
-      toast.loading('Obteniendo análisis detallado con codones...', { id: 'analysis' })
-      try {
-        const lastGenome = successfulGenomes[successfulGenomes.length - 1]
-        await api.activateGenome(lastGenome)
-        await loadFiles()
-        const detailedAnalysis = await api.runCompleteAnalysis()
-        setAnalysisData(detailedAnalysis)
-      } catch (detailError) {
-        console.warn('No se pudo obtener análisis detallado:', detailError)
-        setAnalysisData(null)
-      }
-
+      // Activar el último para análisis detallado
+      const lastGenome = successfulGenomes[successfulGenomes.length - 1]
+      console.log(`🎯 [ANALYSIS] Activando genoma principal: ${lastGenome}`)
+      
+      await api.activateGenome(lastGenome)
+      await loadFiles()
+      
+      toast.loading('Calculando métricas moleculares finales...', { id: 'analysis' })
+      const detailedAnalysis = await api.runCompleteAnalysis()
+      setAnalysisData(detailedAnalysis)
+      
       setCurrentStep(3)
       setActiveView('comparison')
-
-      // Actualizar lista de genomas descargados
       await loadDownloadedGenomes()
 
-      // Mensaje final con resumen
-      if (failedGenomes.length > 0) {
-        toast.success(
-          `✓ ${successfulGenomes.length} genoma${successfulGenomes.length > 1 ? 's' : ''} • ✗ ${failedGenomes.length} falló${failedGenomes.length > 1 ? 'fallaron' : ''}`,
-          { id: 'analysis', duration: 5000 }
-        )
-      } else {
-        toast.success(`${successfulGenomes.length} genoma${successfulGenomes.length > 1 ? 's' : ''} analizado${successfulGenomes.length > 1 ? 's' : ''}`, { id: 'analysis' })
-      }
+      toast.success(
+        failedGenomes.length > 0 
+          ? `Análisis parcial: ${successfulGenomes.length} OK, ${failedGenomes.length} Error`
+          : `Análisis completado: ${successfulGenomes.length} genomas procesados`,
+        { id: 'analysis' }
+      )
+
     } catch (error) {
-      console.error('Analysis error:', error)
-      toast.error('Error en el análisis: ' + (error.response?.data?.detail || error.message), { id: 'analysis' })
+      console.error('🔥 [FATAL ERROR]:', error)
+      toast.error('Error crítico: ' + (error.response?.data?.detail || error.message), { id: 'analysis' })
     } finally {
       setIsLoading(false)
+      console.log('🏁 [ANALYSIS] Flujo terminado.')
     }
   }
 
@@ -351,7 +353,7 @@ function App() {
         {/* Workflow Progress */}
         {currentStep < 3 && (
           <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex-shrink-0">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">Pipeline Progress</div>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">PROGRESO DEL FLUJO</div>
             <div className="space-y-3">
               {steps.map((step) => (
                 <button
@@ -631,12 +633,23 @@ function App() {
                   {activeView === 'codon-usage' && <CodonUsageTable />}
                   {activeView === 'gc-window' && <GCWindowViewer />}
                   {activeView === 'rna' && <RNAAnalysis />}
-                  {activeView === 'blast' && <BLASTSearch />}
+                  {activeView === 'blast' && <BLASTSearch genes={analysisData?.genes?.genes || []} />}
                   {activeView === 'phylo' && <PhylogeneticTree />}
                   {activeView === 'cog' && <FunctionalCategories />}
                   {activeView === 'cai' && <CAIAnalysis />}
                   {activeView === 'chat' && <InteractiveChat hasAnalysis={!!analysisData} currentGenome={currentGenome} />}
-                  {activeView === 'ai' && <AIValidation validationData={aiValidation} isValidating={isValidatingAI} onValidate={runAIValidation} hasAnalysis={!!analysisData} comparisonData={comparisonResult} selectedGenomes={selectedGenomes} currentGenome={currentGenome} />}
+                  {activeView === 'ai' && (
+                    <AIValidation 
+                      validationData={aiValidation} 
+                      technicalValidation={analysisData?.validation}
+                      isValidating={isValidatingAI} 
+                      onValidate={runAIValidation} 
+                      hasAnalysis={!!analysisData} 
+                      comparisonData={comparisonResult} 
+                      selectedGenomes={selectedGenomes} 
+                      currentGenome={currentGenome} 
+                    />
+                  )}
                   {activeView === 'export' && <DataExport hasData={analysisData !== null} comparisonData={comparisonResult} currentGenome={currentGenome} selectedGenomes={selectedGenomes} />}
                 </div>
               </div>

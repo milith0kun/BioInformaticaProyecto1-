@@ -66,13 +66,13 @@ export default function GenomeComparison({ hasAnalysis, downloadedGenomes = [] }
   const chartData = useMemo(() => {
     if (!comparisonData?.genomes) return []
     return comparisonData.genomes.map(g => ({
-      name: g.accession.replace('GCF_', '').replace('GCA_', '').slice(0, 8),
+      name: g.accession?.replace('GCF_', '').replace('GCA_', '').slice(0, 8) || 'N/A',
       fullName: g.organism_name,
-      genome_size: (g.genome_length / 1000000).toFixed(2),
-      genes: g.gene_count,
-      gc: g.gc_content,
-      density: g.gene_density,
-      avg_length: g.avg_gene_length
+      genome_size: ((g.genome_length || 0) / 1000000).toFixed(2),
+      genes: g.gene_count || 0,
+      gc: g.gc_content || 0,
+      density: g.gene_density || 0,
+      avg_length: g.avg_gene_length || 0
     }))
   }, [comparisonData])
 
@@ -83,24 +83,24 @@ export default function GenomeComparison({ hasAnalysis, downloadedGenomes = [] }
     const maxValues = {}
     
     metrics.forEach(m => {
-      maxValues[m] = Math.max(...comparisonData.genomes.map(g => g[m]))
+      maxValues[m] = Math.max(...comparisonData.genomes.map(g => g[m] || 0))
     })
     
     return [
       { metric: 'Tamaño', ...Object.fromEntries(
-        comparisonData.genomes.map(g => [g.accession.slice(-8), (g.genome_length / maxValues.genome_length) * 100])
+        comparisonData.genomes.map(g => [g.accession?.slice(-8) || 'N/A', ( (g.genome_length || 0) / (maxValues.genome_length || 1)) * 100])
       )},
       { metric: 'Genes', ...Object.fromEntries(
-        comparisonData.genomes.map(g => [g.accession.slice(-8), (g.gene_count / maxValues.gene_count) * 100])
+        comparisonData.genomes.map(g => [g.accession?.slice(-8) || 'N/A', ( (g.gene_count || 0) / (maxValues.gene_count || 1)) * 100])
       )},
       { metric: 'GC%', ...Object.fromEntries(
-        comparisonData.genomes.map(g => [g.accession.slice(-8), (g.gc_content / maxValues.gc_content) * 100])
+        comparisonData.genomes.map(g => [g.accession?.slice(-8) || 'N/A', ( (g.gc_content || 0) / (maxValues.gc_content || 1)) * 100])
       )},
       { metric: 'Densidad', ...Object.fromEntries(
-        comparisonData.genomes.map(g => [g.accession.slice(-8), (g.gene_density / maxValues.gene_density) * 100])
+        comparisonData.genomes.map(g => [g.accession?.slice(-8) || 'N/A', ( (g.gene_density || 0) / (maxValues.gene_density || 1)) * 100])
       )},
       { metric: 'Long. Media', ...Object.fromEntries(
-        comparisonData.genomes.map(g => [g.accession.slice(-8), (g.avg_gene_length / maxValues.avg_gene_length) * 100])
+        comparisonData.genomes.map(g => [g.accession?.slice(-8) || 'N/A', ( (g.avg_gene_length || 0) / (maxValues.avg_gene_length || 1)) * 100])
       )}
     ]
   }, [comparisonData])
@@ -271,17 +271,17 @@ export default function GenomeComparison({ hasAnalysis, downloadedGenomes = [] }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {comparisonData.genomes.map((g, i) => (
-                        <tr key={g.accession} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 font-mono text-sm text-teal-700">{g.accession}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{g.organism_name}</td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-600">{(g.genome_length / 1000000).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-600">{g.gene_count.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-sm text-right text-emerald-700 font-medium">{g.gc_content.toFixed(1)}%</td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-600">{g.gene_density.toFixed(1)}</td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-600">{g.avg_gene_length.toFixed(0)} bp</td>
-                        </tr>
-                      ))}
+                        {comparisonData.genomes.map((g, i) => (
+                          <tr key={g.accession} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-mono text-sm text-teal-700">{g.accession}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{g.organism_name}</td>
+                            <td className="px-4 py-3 text-sm text-right text-slate-600">{((g.genome_length || 0) / 1000000).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm text-right text-slate-600">{(g.gene_count || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm text-right text-emerald-700 font-medium">{(g.gc_content || 0).toFixed(1)}%</td>
+                            <td className="px-4 py-3 text-sm text-right text-slate-600">{(g.gene_density || 0).toFixed(1)}</td>
+                            <td className="px-4 py-3 text-sm text-right text-slate-600">{(g.avg_gene_length || 0).toFixed(0)} bp</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>

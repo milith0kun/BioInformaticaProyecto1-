@@ -137,7 +137,7 @@ export default function GenomeViewer() {
             stroke={isHovered ? "#2563eb" : "#3b82f6"}
             strokeWidth={isHovered ? "6" : "3"}
             className="cursor-pointer transition-all opacity-80 hover:opacity-100"
-            onMouseEnter={() => setHoveredItem({ ...g, type: 'Hebra + (5\'→3\' Forward)' })}
+            onMouseEnter={() => setHoveredItem({ ...g, type: 'Sentido (+)' })}
             onMouseLeave={() => setHoveredItem(null)}
           />
         )
@@ -152,7 +152,7 @@ export default function GenomeViewer() {
             stroke={isHovered ? "#4f46e5" : "#6366f1"}
             strokeWidth={isHovered ? "6" : "3"}
             className="cursor-pointer transition-all opacity-80 hover:opacity-100"
-            onMouseEnter={() => setHoveredItem({ ...g, type: 'Hebra − (3\'→5\' Reverse)' })}
+            onMouseEnter={() => setHoveredItem({ ...g, type: 'Antisentido (-)' })}
             onMouseLeave={() => setHoveredItem(null)}
           />
         )
@@ -168,12 +168,13 @@ export default function GenomeViewer() {
             stroke={isHigh ? '#94a3b8' : '#e2e8f0'}
             strokeWidth="4"
             className="cursor-pointer hover:stroke-blue-300 transition-all"
-                        onMouseEnter={() => setHoveredItem({ 
-                          type: isHigh ? 'GC alto (> promedio)' : 'GC bajo (< promedio)',
-                          gc_content: (w.gc || 0).toFixed(2),
-                          start: w.position || 0,
-                          product: `Ventana de contenido GC detectada en la posición ${(w.position || 0).toLocaleString()} pb.`
-                        })}            onMouseLeave={() => setHoveredItem(null)}
+            onMouseEnter={() => setHoveredItem({ 
+              type: isHigh ? 'GC alto (> promedio)' : 'GC bajo (< promedio)',
+              gc_content: (w.gc || 0).toFixed(2),
+              start: w.position || 0,
+              product: `Ventana de contenido GC detectada en la posición ${(w.position || 0).toLocaleString()} pb.`
+            })}
+            onMouseLeave={() => setHoveredItem(null)}
           />
         )
       }),
@@ -189,12 +190,13 @@ export default function GenomeViewer() {
             strokeWidth="3"
             strokeOpacity={Math.min(Math.abs(s.skew) * 5 + 0.2, 1)}
             className="cursor-pointer hover:stroke-rose-400 transition-all"
-                        onMouseEnter={() => setHoveredItem({ 
-                          type: 'GC Skew Picos',
-                          gc_content: (s.skew || 0).toFixed(4),
-                          start: s.position || 0,
-                          product: `Variación de asimetría GC (Skew) detectada en la posición ${(s.position || 0).toLocaleString()} pb.`
-                        })}            onMouseLeave={() => setHoveredItem(null)}
+            onMouseEnter={() => setHoveredItem({ 
+              type: 'GC Skew Picos',
+              gc_content: (s.skew || 0).toFixed(4),
+              start: s.position || 0,
+              product: `Variación de asimetría GC (Skew) detectada en la posición ${(s.position || 0).toLocaleString()} pb.`
+            })}
+            onMouseLeave={() => setHoveredItem(null)}
           />
         )
       })
@@ -272,10 +274,10 @@ export default function GenomeViewer() {
               {/* Legend Toggles */}
               <div className="bg-slate-50/50 rounded-3xl p-6 flex flex-wrap gap-8 items-center justify-center border border-slate-100">
                 {[
-                  { id: 'forward', label: 'Hebra + (5\'→3\' Forward)', color: 'bg-blue-500' },
-                  { id: 'reverse', label: 'Hebra − (3\'→5\' Reverse)', color: 'bg-indigo-500' },
-                  { id: 'gc', label: 'GC alto (> promedio)', color: 'bg-slate-400' },
-                  { id: 'skew', label: 'GC Skew Picos', color: 'bg-rose-500' }
+                  { id: 'forward', label: 'Hebra +', color: 'bg-blue-500' },
+                  { id: 'reverse', label: 'Hebra −', color: 'bg-indigo-500' },
+                  { id: 'gc', label: 'Contenido GC', color: 'bg-slate-400' },
+                  { id: 'skew', label: 'Skew Picos', color: 'bg-rose-500' }
                 ].map(layer => (
                   <button key={layer.id} onClick={() => setVisibility(v => ({ ...v, [layer.id]: !v[layer.id] }))} className={`flex items-center gap-3 transition-all ${visibleLayers[layer.id] ? 'opacity-100 scale-105' : 'opacity-30 grayscale scale-95'}`}>
                     <div className={`w-3 h-3 rounded-full ${layer.color} shadow-sm`}></div>
@@ -315,7 +317,7 @@ export default function GenomeViewer() {
                       {hoveredItem.length && (
                         <div className="border-l border-slate-100 pl-6">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Longitud</p>
-                          <p className="text-xs font-bold text-slate-700">{hoveredItem.length.toLocaleString()} bp</p>
+                          <p className="text-xs font-bold text-slate-700">{(hoveredItem.length || 0).toLocaleString()} bp</p>
                         </div>
                       )}
                     </div>
@@ -343,11 +345,11 @@ export default function GenomeViewer() {
             <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm overflow-hidden flex flex-col max-h-[600px]">
               <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                 {filteredGenes.slice(0, 100).map((gene, i) => (
-                  <div key={i} className={`p-5 rounded-2xl border transition-all group cursor-pointer ${hoveredItem?.locus_tag === gene.locus_tag ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-50 border-slate-100 hover:bg-blue-50'}`}
+                  <div key={i} className={`p-5 rounded-2xl border transition-all group cursor-pointer ${hoveredItem?.locus_tag === gene.locus_tag ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-slate-50 border-slate-100 hover:bg-blue-50'}`}
                     onMouseEnter={() => setHoveredItem({ ...gene, type: gene.strand === 1 ? 'Sentido (+)' : 'Antisentido (-)' })}
                     onMouseLeave={() => setHoveredItem(null)}
                     onClick={() => {
-                      setSeqConfig({ start: gene.start, length: 600 })
+                      setSeqConfig({ start: gene.start || 0, length: 600 })
                       setActiveTab('sequence')
                     }}
                   >
@@ -355,7 +357,11 @@ export default function GenomeViewer() {
                       <p className={`font-mono text-xs font-black uppercase tracking-tighter ${hoveredItem?.locus_tag === gene.locus_tag ? 'text-white' : 'text-slate-900 group-hover:text-blue-600'}`}>{gene.gene_name || gene.locus_tag}</p>
                       <span className={`text-[9px] font-black px-2 py-0.5 rounded ${gene.strand === 1 ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}>{gene.strand === 1 ? '→' : '←'}</span>
                     </div>
-                    <p className={`text-[10px] font-bold uppercase truncate ${hoveredItem?.locus_tag === gene.locus_tag ? 'text-blue-100' : 'text-slate-400'}`}>{gene.product || 'Hipotético'}</p>
+                    <p className={`text-[10px] font-bold uppercase truncate mb-3 ${hoveredItem?.locus_tag === gene.locus_tag ? 'text-blue-100' : 'text-slate-400'}`}>{gene.product || 'Hipotético'}</p>
+                    <div className={`flex justify-between items-center border-t pt-3 ${hoveredItem?.locus_tag === gene.locus_tag ? 'border-white/10' : 'border-slate-200/50'}`}>
+                      <span className={`text-[9px] font-black ${hoveredItem?.locus_tag === gene.locus_tag ? 'text-white/60' : 'text-slate-500'}`}>{(gene.start || 0).toLocaleString()} — {(gene.end || 0).toLocaleString()}</span>
+                      <span className={`text-[9px] font-bold uppercase italic ${hoveredItem?.locus_tag === gene.locus_tag ? 'text-white/40' : 'text-slate-300'}`}>pb</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -422,19 +428,20 @@ export default function GenomeViewer() {
               {/* Stats Footer */}
               <div className="flex flex-col md:flex-row justify-between items-center p-8 bg-slate-50 rounded-[2rem] border border-slate-100 gap-6">
                 <div className="flex gap-10">
-                                      <div className="space-y-1">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Región Visualizada</p>
-                                        <p className="text-sm font-black text-slate-900 uppercase italic">{(seqConfig.start ?? 0).toLocaleString()} — {((seqConfig.start ?? 0) + (sequenceData?.length || 0)).toLocaleString()} <span className="text-[9px] text-slate-400 not-italic">({sequenceData?.length || 0} bp)</span></p>
-                                      </div>
-                                      <div className="space-y-1 border-l border-slate-200 pl-10">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Contenido GC Local</p>
-                                        <p className="text-sm font-black text-blue-600">{sequenceData?.gc_content || 0}%</p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Genoma Total</p>
-                                      <p className="text-sm font-black text-slate-500">{((data?.genome_length || 0) / 1e6).toFixed(2)} Mb</p>
-                                    </div>              </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Región Visualizada</p>
+                    <p className="text-sm font-black text-slate-900 uppercase italic">{(seqConfig.start || 0).toLocaleString()} — {((seqConfig.start || 0) + (sequenceData?.length || 0)).toLocaleString()} <span className="text-[9px] text-slate-400 not-italic">({sequenceData?.length || 0} bp)</span></p>
+                  </div>
+                  <div className="space-y-1 border-l border-slate-200 pl-10">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Contenido GC Local</p>
+                    <p className="text-sm font-black text-blue-600">{sequenceData?.gc_content || 0}%</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Genoma Total</p>
+                  <p className="text-sm font-black text-slate-500">{((data?.genome_length || 0) / 1e6).toFixed(2)} Mb</p>
+                </div>
+              </div>
 
               {/* Atomic Legend */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -466,7 +473,7 @@ export default function GenomeViewer() {
                         <p className="font-mono text-xs font-black text-slate-900 uppercase">→ {g.gene_name || g.locus_tag}</p>
                         <span className="text-[8px] font-black px-2 py-0.5 bg-blue-100 text-blue-600 rounded">({g.strand === 1 ? "5'→3'" : "3'→5'"})</span>
                       </div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{g.start.toLocaleString()} — {g.end.toLocaleString()}</p>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{(g.start || 0).toLocaleString()} — {(g.end || 0).toLocaleString()}</p>
                     </div>
                   ))}
                   {!sequenceData?.genes?.length && <p className="text-[10px] text-slate-300 font-black text-center py-10 uppercase tracking-widest">Región Intergénica</p>}
@@ -540,7 +547,7 @@ export default function GenomeViewer() {
                 {searchResult.type === 'intergenic' ? (
                   <div className="text-center space-y-4">
                     <span className="px-4 py-1.5 bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded-full">Región Intergénica</span>
-                    <p className="text-lg font-black text-slate-900">Coordenada {parseInt(searchPos).toLocaleString()} bp</p>
+                    <p className="text-lg font-black text-slate-900">Coordenada {(parseInt(searchPos) || 0).toLocaleString()} bp</p>
                     <p className="text-sm text-slate-500 font-medium leading-relaxed">{searchResult.message}</p>
                   </div>
                 ) : (

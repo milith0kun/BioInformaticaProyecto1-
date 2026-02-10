@@ -233,7 +233,7 @@ export default function ProteinStructureViewer({
                         </div>
                         <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-50 rounded-full border border-indigo-100">
                             <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.3)]"></div>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest"><span className="text-indigo-600">{(protein.molecular_weight_approx / 1000).toFixed(1)}</span> kDa</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest"><span className="text-indigo-600">{((protein.molecular_weight_approx || 0) / 1000).toFixed(1)}</span> kDa</span>
                         </div>
                         {protein.gene_name && (
                             <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">

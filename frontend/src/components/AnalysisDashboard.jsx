@@ -15,24 +15,32 @@ const STATUS_DOT = {
   FAIL: 'bg-red-500',
 }
 
-function StatCard({ title, value, subtitle, variant = 'teal' }) {
+function StatCard({ title, value, subtitle, variant = 'blue' }) {
   const variants = {
-    teal: 'border-teal-100 bg-gradient-to-br from-teal-50 to-white',
-    emerald: 'border-emerald-100 bg-gradient-to-br from-emerald-50 to-white',
-    slate: 'border-slate-100 bg-gradient-to-br from-slate-50 to-white',
+    blue: 'border-blue-100 bg-white shadow-sm',
+    indigo: 'border-indigo-100 bg-white shadow-sm',
+    slate: 'border-slate-100 bg-white shadow-sm',
   }
 
   const textColors = {
-    teal: 'text-teal-700',
-    emerald: 'text-emerald-700',
+    blue: 'text-blue-600',
+    indigo: 'text-indigo-600',
     slate: 'text-slate-700',
   }
 
+  const iconColors = {
+    blue: 'bg-blue-50 text-blue-500',
+    indigo: 'bg-indigo-50 text-indigo-500',
+    slate: 'bg-slate-50 text-slate-500',
+  }
+
   return (
-    <div className={`rounded-xl border p-4 sm:p-5 ${variants[variant]} transition-all hover:shadow-md`}>
-      <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">{title}</p>
-      <p className={`text-2xl sm:text-3xl font-bold ${textColors[variant]}`}>{value}</p>
-      {subtitle && <p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>}
+    <div className={`rounded-3xl border-2 p-6 ${variants[variant]} transition-all hover:border-blue-200 hover:shadow-xl group`}>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 group-hover:text-blue-500 transition-colors">{title}</p>
+      <div className="flex items-baseline gap-2">
+        <p className={`text-3xl font-black tracking-tighter ${textColors[variant]}`}>{value}</p>
+        {subtitle && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{subtitle}</p>}
+      </div>
     </div>
   )
 }
@@ -46,20 +54,21 @@ function formatNumber(num) {
 export default function AnalysisDashboard({ analysisData, isLoading, status }) {
   if (status === 'idle' && !analysisData) {
     return (
-      <div className="text-center py-12 sm:py-20 px-4">
-        <div className="max-w-xl mx-auto">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto bg-teal-50 rounded-2xl flex items-center justify-center mb-4 sm:mb-6">
-            <svg className="w-8 h-8 sm:w-10 sm:h-10 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      <div className="text-center py-32 px-8">
+        <div className="max-w-2xl mx-auto space-y-8">
+          <div className="w-24 h-24 mx-auto bg-blue-50 rounded-[2rem] flex items-center justify-center border border-blue-100 shadow-inner">
+            <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">
-            Bienvenido al Análisis Genómico
-          </h2>
-          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-            Haga clic en <span className="font-semibold text-teal-600">"Ejecutar Análisis"</span> para comenzar.
-            Se analizarán codones, genes y se validarán los resultados contra valores de referencia.
-          </p>
+          <div className="space-y-4">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">
+              Terminal de Cómputo <span className="text-blue-600">MG1655</span>
+            </h2>
+            <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed uppercase text-[10px] tracking-[0.2em]">
+              Entorno listo para procesamiento de secuencias genómicas y validación molecular.
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -67,251 +76,201 @@ export default function AnalysisDashboard({ analysisData, isLoading, status }) {
 
   if (isLoading) {
     return (
-      <div className="text-center py-12 sm:py-20 px-4">
-        <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mb-4 sm:mb-6"></div>
-        <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">Analizando genoma...</h2>
-        <p className="text-sm sm:text-base text-slate-500">Procesando datos genómicos</p>
+      <div className="text-center py-48 px-8">
+        <div className="w-20 h-20 mx-auto relative mb-10">
+          <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-transparent border-t-blue-600 rounded-full animate-spin"></div>
+        </div>
+        <h2 className="text-xs font-black text-slate-900 uppercase tracking-[0.5em] animate-pulse">Sincronizando Hebras...</h2>
       </div>
     )
   }
 
-  if (!analysisData) {
-    return (
-      <div className="text-center py-12 sm:py-20 px-4">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto bg-red-50 rounded-2xl flex items-center justify-center mb-4 sm:mb-6">
-          <svg className="w-8 h-8 sm:w-10 sm:h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">Error en el análisis</h2>
-        <p className="text-sm sm:text-base text-slate-500">Ocurrió un error. Por favor, inténtelo de nuevo.</p>
-      </div>
-    )
-  }
+  if (!analysisData) return null
 
   const { codons, genes, validation } = analysisData
 
   return (
-    <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Longitud del Genoma"
-          value={formatNumber(genes.genome_length)}
-          subtitle="pares de bases"
-          variant="teal"
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Principal Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+          title="Longitud del Genoma" 
+          value={`${(genes.genome_length / 1e6).toFixed(2)}M`} 
+          subtitle="pares de bases" 
+          variant="blue" 
         />
-        <StatCard
-          title="Total de Genes"
-          value={formatNumber(genes.total_genes)}
-          subtitle={`${genes.total_cds} CDS`}
-          variant="emerald"
+        <StatCard 
+          title="Total de Genes" 
+          value={formatNumber(genes.total_genes)} 
+          subtitle={`${genes.total_cds} CDS`} 
+          variant="indigo" 
         />
-        <StatCard
-          title="Contenido GC"
-          value={`${genes.gc_content}%`}
-          subtitle="guanina + citosina"
-          variant="teal"
+        <StatCard 
+          title="Contenido GC" 
+          value={`${genes.gc_content}%`} 
+          subtitle="guanina + citosina" 
+          variant="blue" 
         />
-        <StatCard
-          title="Codones ATG"
-          value={formatNumber(codons.atg_count)}
-          subtitle={`${codons.atg_density}/kb`}
-          variant="emerald"
+        <StatCard 
+          title="Codones ATG" 
+          value={formatNumber(codons.atg_count)} 
+          subtitle={`${(codons.atg_count / (genes.genome_length / 1000)).toFixed(2)}/kb`} 
+          variant="indigo" 
         />
       </div>
 
-      {/* Secondary Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-          <p className="text-xs uppercase tracking-wide text-slate-500 font-medium">Densidad Génica</p>
-          <p className="text-2xl sm:text-3xl font-bold text-teal-700 mt-1">{genes.gene_density}</p>
-          <p className="text-xs sm:text-sm text-slate-500">genes por megabase</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-          <p className="text-xs uppercase tracking-wide text-slate-500 font-medium">Tamaño Promedio</p>
-          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1">{genes.size_statistics.mean.toFixed(0)}</p>
-          <p className="text-xs sm:text-sm text-slate-500">pares de bases</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-          <p className="text-xs uppercase tracking-wide text-slate-500 font-medium">ATG vs Genes</p>
-          <p className="text-2xl sm:text-3xl font-bold text-slate-700 mt-1">
-            {codons.gene_comparison.difference > 0 ? '+' : ''}{codons.gene_comparison.difference}
-          </p>
-          <p className="text-xs sm:text-sm text-slate-500">diferencia</p>
-        </div>
-      </div>
-
-      {/* Spatial Statistics */}
-      {codons.spatial_distribution && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">📊 Estadísticas de Distribución Espacial ATG</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Desviación Estándar</p>
-              <p className="text-2xl font-bold text-blue-700">{codons.spatial_distribution.std_dev.toFixed(3)}</p>
-              <p className="text-xs text-slate-500 mt-1">±σ margen de error</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Coef. Variación</p>
-              <p className="text-2xl font-bold text-purple-700">{codons.spatial_distribution.coefficient_of_variation.toFixed(1)}%</p>
-              <p className="text-xs text-slate-500 mt-1">dispersión relativa</p>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Score Uniformidad</p>
-              <p className="text-2xl font-bold text-emerald-700">{codons.spatial_distribution.uniformity_score.toFixed(1)}/100</p>
-              <p className="text-xs text-slate-500 mt-1">100 = perfecto</p>
-            </div>
-            <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl border border-amber-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Rango</p>
-              <p className="text-2xl font-bold text-amber-700">{codons.spatial_distribution.range_positions}</p>
-              <p className="text-xs text-slate-500 mt-1">ventanas analizadas</p>
-            </div>
+      {/* Secondary Technical Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Densidad Génica</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-slate-900 tracking-tighter">{genes.gene_density.toFixed(2)}</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">genes / Mb</p>
           </div>
         </div>
-      )}
-
-      {/* Stop Codons */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-        <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">Distribución de Codones de Parada</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          {Object.entries(codons.stop_codons).map(([codon, data]) => (
-            <div key={codon} className="text-center p-4 bg-slate-50 rounded-xl">
-              <span className="inline-block px-3 py-1 bg-white rounded-lg shadow-sm font-mono font-bold text-base sm:text-lg text-slate-800 mb-2">
-                {codon}
-              </span>
-              <p className="text-xl sm:text-2xl font-bold text-teal-700">{formatNumber(data.count)}</p>
-              {data.spatial_distribution && (
-                <div className="mt-2 text-left space-y-1">
-                  <p className="text-xs text-slate-600">
-                    σ espacial: <span className="font-semibold text-blue-700">{data.spatial_distribution.std_dev.toFixed(2)}</span>
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    CV: <span className="font-semibold text-purple-700">{data.spatial_distribution.coefficient_of_variation.toFixed(1)}%</span>
-                  </p>
-                </div>
-              )}
-              <div className="mt-3 bg-slate-200 rounded-full h-2 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
-                  style={{ width: `${data.percentage}%` }}
-                />
-              </div>
-              <p className="text-xs sm:text-sm text-slate-600 mt-1">{data.percentage.toFixed(1)}%</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Statistical Quality Metrics */}
-      {codons.statistical_quality && (
-        <div className="bg-gradient-to-br from-indigo-50 to-white rounded-xl border border-indigo-200 p-4 sm:p-6">
-          <h3 className="font-semibold text-slate-800 mb-4 text-sm sm:text-base">🎯 Calidad Estadística del Análisis</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Ratio ATG/Stop</p>
-              <p className="text-xl sm:text-2xl font-bold text-indigo-700">{codons.statistical_quality.atg_stop_ratio.toFixed(3)}</p>
-              <p className="text-xs text-slate-500 mt-1">balance codones</p>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Precisión Genes</p>
-              <p className="text-xl sm:text-2xl font-bold text-teal-700">{codons.statistical_quality.gene_count_accuracy.toFixed(1)}%</p>
-              <p className="text-xs text-slate-500 mt-1">ATG vs genes CDS</p>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Score Calidad</p>
-              <p className="text-xl sm:text-2xl font-bold text-emerald-700">{codons.statistical_quality.quality_score.toFixed(1)}/100</p>
-              <p className="text-xs text-slate-500 mt-1">confiabilidad</p>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">No Codificantes</p>
-              <p className="text-xl sm:text-2xl font-bold text-purple-700">{codons.statistical_quality.non_coding_atg_estimated}</p>
-              <p className="text-xs text-slate-500 mt-1">ATG extras</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Validation Results */}
-      {validation && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${STATUS_DOT[validation.overall_status]}`}></span>
-              <h3 className="font-semibold text-slate-800 text-sm sm:text-base">Validación contra Referencia</h3>
-            </div>
-            <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${STATUS_COLORS[validation.overall_status]} w-fit`}>
-              {validation.overall_status === 'PASS' && 'Validado'}
-              {validation.overall_status === 'WARNING' && 'Con advertencias'}
-              {validation.overall_status === 'FAIL' && 'No validado'}
-            </span>
-          </div>
-
-          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-            <table className="w-full text-xs sm:text-sm min-w-[600px]">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                  <th className="pb-3 font-medium whitespace-nowrap pr-2">Métrica</th>
-                  <th className="pb-3 font-medium whitespace-nowrap px-2">Calculado</th>
-                  <th className="pb-3 font-medium whitespace-nowrap px-2">Referencia</th>
-                  <th className="pb-3 font-medium whitespace-nowrap px-2">Desviación</th>
-                  <th className="pb-3 font-medium whitespace-nowrap pl-2">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {validation.items.map((item, index) => (
-                  <tr key={index} className="hover:bg-slate-50">
-                    <td className="py-3 font-medium text-slate-800 pr-2">
-                      <span className="line-clamp-2">
-                        {item.metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </span>
-                    </td>
-                    <td className="py-3 text-slate-600 px-2">
-                      {typeof item.calculated === 'number'
-                        ? item.calculated.toLocaleString('es-ES', { maximumFractionDigits: 2 })
-                        : item.calculated}
-                    </td>
-                    <td className="py-3 text-slate-600 px-2">
-                      {typeof item.reference === 'number'
-                        ? item.reference.toLocaleString('es-ES', { maximumFractionDigits: 2 })
-                        : item.reference}
-                    </td>
-                    <td className="py-3 px-2">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${item.deviation_percent <= 5 ? 'bg-emerald-100 text-emerald-700' :
-                          item.deviation_percent <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                        {item.deviation_percent.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="py-3 pl-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[item.status]}`}></span>
-                        <span className="text-xs text-slate-600 whitespace-nowrap">{item.status}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Info Box */}
-      <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 sm:p-5">
-        <div className="flex gap-3">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-teal-800 mb-1 text-xs sm:text-sm">Información de Referencia</h4>
-            <p className="text-xs sm:text-sm text-teal-700 leading-relaxed">
-              <strong>E. coli K-12 MG1655</strong> es la cepa de referencia de Escherichia coli,
-              con un genoma de aproximadamente 4.6 millones de pares de bases y ~4,300 genes.
-              Los valores de referencia corresponden a la secuencia RefSeq <span className="font-mono">NC_000913.3</span>.
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Tamaño Promedio</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-slate-900 tracking-tighter">
+              {Math.round(genes.genome_length / (genes.total_genes || 1))}
             </p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">pb / gen</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">ATG vs Genes</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-blue-600 tracking-tighter">
+              +{codons.atg_count - genes.total_genes}
+            </p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">diferencia</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Validation section */}
+          <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+            <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+              <div className="space-y-1">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                  {validation.validation_type === 'multi' ? 'Consenso del Grupo Analizado' : 'Validación contra Referencia'}
+                </h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">
+                  {validation.reference_source || 'Comparativa RefSeq NC_000913.3'}
+                </p>
+              </div>
+              <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[validation.overall_status]}`}>
+                {validation.overall_status === 'PASS' ? 'SISTEMA VALIDADO' : 'FUERA DE RANGO'}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-white border-b border-slate-50">
+                  <tr>
+                    <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Métrica</th>
+                    <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor</th>
+                    <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      {validation.validation_type === 'multi' ? 'Media Grupo' : 'Referencia'}
+                    </th>
+                    <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Desviación</th>
+                    <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {validation.items.map((item, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-8 py-5">
+                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{item.metric.replace(/_/g, ' ')}</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="font-mono text-xs font-black text-blue-600">
+                          {(item.calculated || 0).toLocaleString()}
+                        </p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="font-mono text-[10px] font-bold text-slate-400">
+                          {item.reference?.toLocaleString() || 'N/A'}
+                        </p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="font-mono text-[10px] font-black text-slate-500">
+                          {item.deviation_percent || item.deviation || '0.00'}%
+                        </p>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[item.status]}`}></div>
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${item.status === 'PASS' ? 'text-emerald-600' : item.status === 'WARNING' ? 'text-amber-600' : 'text-rose-600'}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="p-8 bg-blue-50/50 border-2 border-blue-100 rounded-[2rem] flex gap-6 items-start">
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm flex-shrink-0">ℹ️</div>
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Información de Referencia</h4>
+              <p className="text-[11px] text-blue-900/70 font-medium leading-relaxed">
+                E. coli K-12 MG1655 es la cepa de referencia de Escherichia coli, con un genoma de aproximadamente 4.6 millones de pares de bases y ~4,300 genes. Los valores de referencia corresponden a la secuencia RefSeq NC_000913.3.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Info - Stop Codons Distribution */}
+        <div className="space-y-6">
+          <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl shadow-blue-900/20 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
+            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-10 text-slate-400">Distribución de Parada</h4>
+            <div className="space-y-10 relative z-10">
+              {Object.entries(codons?.stop_codons || {}).map(([codon, data]) => (
+                <div key={codon} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-sm font-black tracking-[0.3em] text-blue-400">{codon}</span>
+                    <div className="text-right">
+                      <span className="text-xs font-black block">{data.count?.toLocaleString()}</span>
+                      <span className="text-[9px] font-bold text-slate-500 uppercase">{(data.percentage || 0).toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)] transition-all duration-1000" 
+                      style={{ width: `${data.percentage || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-8 opacity-5">
+              <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Métricas de Espacio</h4>
+            <div className="space-y-6 relative z-10">
+              <div className="flex justify-between items-end">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Desviación σ</span>
+                <span className="text-2xl font-black text-slate-900 tracking-tighter">{codons?.spatial_distribution?.std_dev?.toFixed(3) || '0.000'}</span>
+              </div>
+              <div className="flex justify-between items-end">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Uniformidad</span>
+                <span className="text-2xl font-black text-slate-900 tracking-tighter">{codons?.spatial_distribution?.uniformity_score?.toFixed(1) || '0.0'}%</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed uppercase pt-4 border-t border-slate-50">
+                Consistencia espacial de tripletas detectada en la hebra MG1655.
+              </p>
+            </div>
           </div>
         </div>
       </div>

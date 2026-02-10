@@ -58,8 +58,8 @@ export default function PhylogeneticTree() {
             return
         }
 
-        const baseSpacing = data.labels.length <= 5 ? 100 : data.labels.length <= 10 ? 80 : 60
-        const displayH = Math.max(400, data.labels.length * baseSpacing)
+        const baseSpacing = (data.labels || []).length <= 5 ? 100 : (data.labels || []).length <= 10 ? 80 : 60
+        const displayH = Math.max(400, (data.labels || []).length * baseSpacing)
 
         canvas.width = displayW * dpr
         canvas.height = displayH * dpr
@@ -81,6 +81,7 @@ export default function PhylogeneticTree() {
         // Get leaf order from tree traversal to prevent crossing branches
         const orderedLeaves = []
         const getLeafOrder = (node) => {
+            if (!node) return
             if (!node.children || node.children.length === 0) {
                 orderedLeaves.push(node.name)
             } else {
@@ -102,11 +103,11 @@ export default function PhylogeneticTree() {
 
         // Scale x position: root at marginLeft, leaves at marginLeft + treeW
         const getMaxHeight = (node) => {
-            if (!node.children || node.children.length === 0) return 0
+            if (!node || !node.children || node.children.length === 0) return 0
             return Math.max(node.height || 0, ...node.children.map(getMaxHeight))
         }
         const maxH = getMaxHeight(data.tree) || 1
-        
+
         // Root is at height maxH, leaves at height 0
         const xScale = (h) => marginLeft + (1 - h / maxH) * treeW
 
@@ -114,8 +115,9 @@ export default function PhylogeneticTree() {
 
         // Recursive draw
         const drawNode = (node) => {
+            if (!node) return { y: 0, x: 0 }
             if (!node.children || node.children.length === 0) {
-                return { y: leafY[node.name], x: marginLeft + treeW }
+                return { y: leafY[node.name] || 0, x: marginLeft + treeW }
             }
 
             const childPositions = node.children.map(drawNode)
@@ -144,12 +146,12 @@ export default function PhylogeneticTree() {
 
                 // Branch length label - Only show if significant and enough space
                 const child = node.children[i]
-                if (child.branch_length !== undefined && child.branch_length > 0.0001) {
+                if (child && child.branch_length !== undefined && child.branch_length > 0.0001) {
                     const midX = (nodeX + pos.x) / 2
                     ctx.fillStyle = '#64748b'
                     ctx.font = 'italic 9px font-mono'
                     ctx.textAlign = 'center'
-                    ctx.fillText(child.branch_length.toFixed(4), midX, pos.y - 6)
+                    ctx.fillText((child.branch_length || 0).toFixed(4), midX, pos.y - 6)
                 }
             })
 
@@ -162,7 +164,7 @@ export default function PhylogeneticTree() {
         ctx.textAlign = 'left'
         ctx.textBaseline = 'middle'
         orderedLeaves.forEach((label, i) => {
-            const y = leafY[label]
+            const y = leafY[label] || 0
             const x = marginLeft + treeW
 
             // Connection dot
@@ -177,7 +179,7 @@ export default function PhylogeneticTree() {
             // Label - Use 900 for extra bold
             ctx.fillStyle = '#1e293b'
             ctx.font = '900 13px system-ui, sans-serif'
-            ctx.fillText(label, x + 20, y - 10)
+            ctx.fillText(label || 'Unknown', x + 20, y - 10)
 
             // Subtitle info
             const genome = data.genomes?.find(g => g.name === label)
@@ -185,7 +187,7 @@ export default function PhylogeneticTree() {
                 ctx.fillStyle = '#64748b'
                 ctx.font = '500 11px system-ui, sans-serif'
                 ctx.fillText(
-                    `${genome.accession} • GC: ${genome.gc}% • ${(genome.length / 1e6).toFixed(2)} Mb`,
+                    `${genome.accession} • GC: ${genome.gc}% • ${(genome.length / 1e6 || 0).toFixed(2)} Mb`,
                     x + 20, y + 10
                 )
             }
@@ -256,10 +258,10 @@ export default function PhylogeneticTree() {
 
     if (loading) {
         return (
-            <div className="text-center py-16">
-                <div className="w-12 h-12 border-3 border-teal-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-slate-500">Calculando distancias filogenéticas...</p>
-                <p className="text-xs text-slate-400 mt-1">Comparando genomas por GC, tamaño, y contenido génico</p>
+            <div className="flex flex-col items-center justify-center py-48">
+                <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
+                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em] animate-pulse text-center">Calculando Distancias...</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-4 uppercase tracking-widest">Comparando arquitectura genómica</p>
             </div>
         )
     }
@@ -270,130 +272,101 @@ export default function PhylogeneticTree() {
     const isSingleGenome = data.single_genome || genomesCount === 1
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800">🌳 Árbol Filogenético</h2>
-                    <p className="text-sm text-slate-500">
+        <div className="space-y-10 animate-in fade-in duration-1000">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 bg-white p-10 rounded-[3rem] border-2 border-slate-100 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] -mr-32 -mt-32"></div>
+                <div className="space-y-4 relative z-10">
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
+                        Árbol <span className="text-blue-600">Filogenético</span>
+                    </h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         {isSingleGenome ? (
                             <>
-                                <span className="font-medium text-blue-600">1 genoma</span> cargado — {data.method}
+                                <span className="text-blue-600 font-black">1 GENOMA</span> CARGADO — {data.method}
                             </>
                         ) : (
                             <>
-                                <span className="font-medium text-teal-600">{genomesCount} genomas</span> comparados — {data.method}
+                                <span className="text-blue-600 font-black">{genomesCount} GENOMAS</span> COMPARADOS — {data.method}
                             </>
                         )}
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3 relative z-10">
                     {!isSingleGenome && (
                         <button onClick={() => setShowMatrix(!showMatrix)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${showMatrix
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-300'
+                            className={`px-6 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center gap-2 ${showMatrix
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border-2 border-slate-100 text-slate-600 hover:border-blue-200'
                                 }`}>
-                            📊 Matriz Distancias
+                            <span>📊</span> Matriz Distancias
                         </button>
                     )}
                     <button onClick={loadTree}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:border-teal-300">
-                        🔄 Recalcular
+                        className="px-6 py-2.5 bg-slate-900 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all hover:bg-blue-600 shadow-xl active:scale-95 flex items-center gap-2">
+                        <span>🔄</span> Recalcular
                     </button>
                 </div>
             </div>
 
             {/* Info banner for single genome */}
             {isSingleGenome && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-blue-800 text-sm">
-                        <span className="font-semibold">💡 Información:</span> Se necesitan al menos 2 genomas para construir un árbol filogenético comparativo.
-                        Descargue genomas adicionales desde la pestaña de archivos para habilitar la comparación.
+                <div className="bg-blue-50 border-2 border-blue-100 rounded-[2rem] p-8 flex items-center gap-6">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm">💡</div>
+                    <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest leading-relaxed">
+                        Se requieren al menos <span className="font-black">2 genomas</span> para construir un árbol comparativo.
+                        Descarga genomas adicionales para habilitar el motor de clustering.
                     </p>
                 </div>
             )}
 
             {/* Genome Summary Cards */}
-            <div className={`grid gap-2 ${
-                genomesCount === 1 ? 'grid-cols-1 max-w-md mx-auto' :
+            <div className={`grid gap-6 ${genomesCount === 1 ? 'grid-cols-1 max-w-md mx-auto' :
                 genomesCount === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-                genomesCount <= 6 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
-                genomesCount <= 12 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' :
-                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6'
-            }`}>
+                    'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                }`}>
                 {data.genomes?.map((g, i) => (
                     <div
                         key={i}
-                        className={`bg-white rounded-lg border border-slate-200 flex items-center gap-3 hover:shadow-md transition-shadow ${
-                            genomesCount > 12 ? 'p-2' : 'p-4'
-                        }`}
+                        className="bg-white rounded-[2rem] border-2 border-slate-100 p-6 flex items-center gap-5 hover:border-blue-200 hover:shadow-xl transition-all group"
                     >
                         <div
-                            className={`rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0 ${
-                                genomesCount > 12 ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'
-                            }`}
-                            style={{ backgroundColor: ['#14b8a6', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f97316', '#3b82f6'][i % 10] }}
+                            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-lg group-hover:rotate-12 transition-transform shrink-0"
+                            style={{ backgroundColor: ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#e11d48', '#0891b2', '#059669', '#ea580c'][i % 8] }}
                         >
                             {g.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p
-                                className={`font-semibold text-slate-800 truncate ${
-                                    genomesCount > 12 ? 'text-xs' : 'text-sm'
-                                }`}
-                                title={g.name}
-                            >
+                            <p className="font-black text-slate-900 truncate text-xs uppercase tracking-tight group-hover:text-blue-600 transition-colors" title={g.name}>
                                 {g.name}
                             </p>
-                            <p className={`text-slate-500 ${genomesCount > 12 ? 'text-[9px]' : 'text-[10px]'}`}>
-                                {genomesCount > 12 ? (
-                                    // Compact view for many genomes
-                                    <>GC: {g.gc}% | {(g.length / 1e6).toFixed(1)} Mb</>
-                                ) : (
-                                    // Full view for fewer genomes
-                                    <>{g.accession} | GC: {g.gc}% | {(g.length / 1e6).toFixed(2)} Mb | {g.gene_count} genes</>
-                                )}
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                {g.accession} | GC: {g.gc}% | {(g.length / 1e6).toFixed(2)} Mb | {g.gene_count} genes
                             </p>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* Summary stats for many genomes */}
-            {genomesCount > 12 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                    <p className="text-sm text-slate-600">
-                        <span className="font-semibold">📊 Resumen:</span> {genomesCount} genomas |
-                        GC promedio: {(data.genomes.reduce((sum, g) => sum + g.gc, 0) / genomesCount).toFixed(2)}% |
-                        Tamaño promedio: {(data.genomes.reduce((sum, g) => sum + g.length, 0) / genomesCount / 1e6).toFixed(2)} Mb |
-                        Genes totales: {data.genomes.reduce((sum, g) => sum + g.gene_count, 0).toLocaleString()}
-                    </p>
-                </div>
-            )}
-
             {/* Dendrogram Canvas */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5 overflow-x-auto">
-                <canvas ref={canvasRef} />
+            <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-10 overflow-x-auto shadow-sm relative">
+                <div className="absolute top-8 left-10 flex items-center gap-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dendrograma Visual</span>
+                </div>
+                <canvas ref={canvasRef} className="mx-auto" />
             </div>
 
             {/* Distance Matrix */}
             {showMatrix && data.distance_matrix && !isSingleGenome && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-slate-800">Matriz de Distancias Genéticas</h3>
-                        {genomesCount > 8 && (
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                {genomesCount}×{genomesCount} matriz
-                            </span>
-                        )}
-                    </div>
-                    <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                        <table className="text-xs">
+                <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-10 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-8">Matriz de Distancia Molecular</h3>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-[10px] border-separate border-spacing-1">
                             <thead>
                                 <tr>
-                                    <th className="px-2 py-1"></th>
+                                    <th className="p-3"></th>
                                     {data.labels.map((l, i) => (
-                                        <th key={i} className="px-2 py-1 text-slate-600 font-medium text-left max-w-[120px] truncate" title={l}>
+                                        <th key={i} className="p-3 text-slate-400 font-black text-left uppercase tracking-tighter truncate max-w-[120px]" title={l}>
                                             {l.split(' ').slice(0, 2).join(' ')}
                                         </th>
                                     ))}
@@ -402,17 +375,18 @@ export default function PhylogeneticTree() {
                             <tbody>
                                 {data.distance_matrix.map((row, i) => (
                                     <tr key={i}>
-                                        <td className="px-2 py-1 font-medium text-slate-600 max-w-[120px] truncate" title={data.labels[i]}>
+                                        <td className="p-3 font-black text-slate-700 uppercase tracking-tighter truncate max-w-[120px]" title={data.labels[i]}>
                                             {data.labels[i].split(' ').slice(0, 2).join(' ')}
                                         </td>
                                         {row.map((val, j) => (
-                                            <td key={j} className="px-2 py-1 text-center font-mono"
+                                            <td key={j} className="p-3 text-center font-mono rounded-xl transition-all hover:scale-110"
                                                 style={{
-                                                    backgroundColor: i === j ? '#f1f5f9' :
-                                                        `rgba(20, 184, 166, ${Math.max(0.05, 1 - val * 3)})`,
-                                                    color: val < 0.2 ? '#134e4a' : '#334155'
+                                                    backgroundColor: i === j ? '#f8fafc' :
+                                                        `rgba(37, 99, 235, ${Math.max(0.05, 1 - (val || 0) * 2)})`,
+                                                    color: (val || 0) < 0.3 ? '#ffffff' : '#475569',
+                                                    fontWeight: (val || 0) < 0.3 ? '900' : '500'
                                                 }}>
-                                                {i === j ? '—' : val.toFixed(4)}
+                                                {i === j ? '—' : (val || 0).toFixed(4)}
                                             </td>
                                         ))}
                                     </tr>
@@ -423,24 +397,39 @@ export default function PhylogeneticTree() {
                 </div>
             )}
 
-            {/* Info */}
-            <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                <div className="flex gap-3">
-                    <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
+            {/* Technical Methodology Info */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group shadow-blue-900/20">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] -mr-32 -mt-32 rounded-full"></div>
+                <div className="flex flex-col md:flex-row gap-10 relative z-10">
+                    <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-3xl shadow-lg flex-shrink-0">📊</div>
+                    <div className="space-y-4 flex-1">
+                        <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Metodología UPGMA</h4>
+                        <p className="text-sm font-medium text-slate-300 leading-relaxed max-w-4xl">
+                            Dendrograma UPGMA: Clustering jerárquico no ponderado por pares (Unweighted Pair Group Method with Arithmetic mean). Las distancias se calculan combinando:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+                            {[
+                                { label: 'Contenido GC', pct: '30%', desc: 'Diferencia en % GC entre genomas' },
+                                { label: 'Tamaño Genoma', pct: '10%', desc: 'Ratio de tamaños' },
+                                { label: 'Contenido Génico', pct: '30%', desc: 'Índice Jaccard de genes compartidos' },
+                                { label: 'Productos Génicos', pct: '30%', desc: 'Similitud de las funciones génicas' }
+                            ].map(item => (
+                                <div key={item.label} className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                                    <div className="flex justify-between items-baseline mb-2">
+                                        <span className="text-[9px] font-black text-blue-400 uppercase">{item.label}</span>
+                                        <span className="text-xs font-black">{item.pct}</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 font-bold uppercase">{item.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-bold italic pt-4">
+                            Nota: Para análisis filogenético riguroso se recomienda usar alineamiento de 16S rRNA o genes housekeeping.
+                        </p>
                     </div>
-                    <div className="text-sm text-teal-800 space-y-1">
-                        <p><strong>Dendrograma UPGMA</strong>: Clustering jerárquico no ponderado por pares (Unweighted Pair Group Method with Arithmetic mean). Las distancias se calculan combinando:</p>
-                        <ul className="text-xs text-teal-700 list-disc list-inside space-y-0.5">
-                            <li><strong>Contenido GC</strong> (30%): Diferencia en % GC entre genomas</li>
-                            <li><strong>Tamaño del genoma</strong> (10%): Ratio de tamaños</li>
-                            <li><strong>Contenido génico</strong> (30%): Índice Jaccard de genes compartidos</li>
-                            <li><strong>Productos génicos</strong> (30%): Similitud de las funciones génicas</li>
-                        </ul>
-                        <p className="text-xs text-teal-700">Nota: Para análisis filogenético riguroso se recomienda usar alineamiento de 16S rRNA o genes housekeeping.</p>
-                    </div>
+                </div>
+                <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-end">
+                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest animate-pulse">LABORATORY SYSTEM ONLINE</span>
                 </div>
             </div>
         </div>

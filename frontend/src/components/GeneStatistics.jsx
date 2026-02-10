@@ -1,8 +1,9 @@
 /**
- * GeneStatistics Component
- * Displays gene analysis with interactive charts and searchable table
+ * GeneStatistics Component — Clean Laboratory Edition
+ * Comprehensive gene analysis with paginated list and interactive charts - 100% Spanish
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import api from '../services/api'
 import {
   BarChart,
   Bar,
@@ -11,737 +12,445 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
   ScatterChart,
   Scatter,
   ZAxis
 } from 'recharts'
-import { AgGridReact } from 'ag-grid-react'
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
-import { api } from '../services/api'
+
+const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#0f172a']
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-xs font-bold text-white uppercase tracking-tight">
+            {entry.name === 'count' ? 'Cantidad' : entry.name}: <span className="text-blue-200">{entry.value}</span>
+          </p>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
 
 export default function GeneStatistics({ geneData }) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [paginatedGenes, setPaginatedGenes] = useState({ genes: [], total: 0 })
-  const [currentPage, setCurrentPage] = useState(1)
-  const [isLoading, setIsLoading] = useState(false)
+  const [paginatedGenes, setPaginatedGenes] = useState([])
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalGenesCount, setTotalGenesCount] = useState(0)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [loadingTable, setLoading] = useState(false)
 
-  const loadGenes = useCallback(async (page = 1, search = '') => {
-    setIsLoading(true)
-    try {
-      const result = await api.getGeneResults(page, 50, search)
-      setPaginatedGenes(result)
-      setCurrentPage(page)
-    } catch (error) {
-      console.error('Error loading genes:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const pageSize = 50
 
   useEffect(() => {
-    if (geneData) loadGenes(1, '')
-  }, [geneData, loadGenes])
-
-  const handleSearch = () => loadGenes(1, searchQuery)
-  const handleKeyPress = (e) => { if (e.key === 'Enter') handleSearch() }
-
-  // Componente para renderizar la hebra con dirección clara
-  const StrandCellRenderer = (props) => {
-    const isForward = props.value === 1
-    return (
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        padding: '4px 8px',
-        borderRadius: '6px',
-        fontSize: '10px',
-        fontWeight: '600',
-        background: isForward ? '#f0fdfa' : '#f5f3ff',
-        color: isForward ? '#0d9488' : '#7c3aed',
-        border: `1px solid ${isForward ? '#99f6e4' : '#ddd6fe'}`,
-        whiteSpace: 'nowrap'
-      }}>
-        {isForward ? "→ 5'→3'" : "← 3'→5'"}
-      </span>
-    )
-  }
-
-  // Componente para renderizar codones
-  const CodonCellRenderer = (props) => {
-    const codon = props.value
-    if (!codon) {
-      return <span style={{ color: '#cbd5e1', fontStyle: 'italic', fontSize: '11px' }}>—</span>
+    if (geneData) {
+      loadTableData(1, '')
     }
+  }, [geneData])
 
-    // Colores para diferentes codones
-    const isStart = ['ATG', 'GTG', 'TTG', 'CTG'].includes(codon)
-    const isStop = ['TAA', 'TAG', 'TGA'].includes(codon)
-
-    return (
-      <span style={{
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        fontWeight: '600',
-        padding: '2px 6px',
-        borderRadius: '4px',
-        background: isStart ? '#dcfce7' : isStop ? '#fee2e2' : '#f1f5f9',
-        color: isStart ? '#15803d' : isStop ? '#dc2626' : '#475569'
-      }}>
-        {codon}
-      </span>
-    )
+  const loadTableData = async (pageNum, search) => {
+    setLoading(true)
+    try {
+      const result = await api.getGeneResults(pageNum, pageSize, search)
+      setPaginatedGenes(result.genes || [])
+      setTotalPages(result.total_pages || 1)
+      setTotalGenesCount(result.total || 0)
+    } catch (e) {
+      console.error("Error cargando tabla de genes:", e)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const columnDefs = useMemo(() => [
-    {
-      field: 'locus_tag',
-      headerName: 'Locus Tag',
-      width: 140,
-      sortable: true,
-      filter: true,
-      pinned: 'left',
-      cellStyle: { fontWeight: '600', color: '#0f766e', fontFamily: 'monospace', fontSize: '12px' }
-    },
-    {
-      field: 'gene_name',
-      headerName: 'Nombre Gen',
-      width: 110,
-      sortable: true,
-      filter: true,
-      valueFormatter: p => p.value || '—',
-      cellStyle: params => params.value ? { color: '#0d9488', fontWeight: '500' } : { color: '#94a3b8' }
-    },
-    {
-      field: 'start',
-      headerName: 'Inicio (bp)',
-      width: 110,
-      sortable: true,
-      valueFormatter: p => p.value?.toLocaleString(),
-      cellStyle: { fontFamily: 'monospace', fontSize: '12px' }
-    },
-    {
-      field: 'end',
-      headerName: 'Fin (bp)',
-      width: 110,
-      sortable: true,
-      valueFormatter: p => p.value?.toLocaleString(),
-      cellStyle: { fontFamily: 'monospace', fontSize: '12px' }
-    },
-    {
-      field: 'length',
-      headerName: 'Longitud (bp)',
-      width: 120,
-      sortable: true,
-      valueFormatter: p => p.value?.toLocaleString(),
-      cellStyle: { fontWeight: '500', color: '#0f172a' }
-    },
-    {
-      field: 'strand',
-      headerName: 'Hebra',
-      width: 95,
-      sortable: true,
-      cellRenderer: StrandCellRenderer,
-      tooltipValueGetter: params => {
-        const isForward = params.value === 1
-        return isForward
-          ? "Hebra Forward: 5'→3' (sentido directo)"
-          : "Hebra Reverse: 3'→5' (sentido complementario)"
-      }
-    },
-    {
-      field: 'gc_content',
-      headerName: 'GC%',
-      width: 85,
-      sortable: true,
-      valueFormatter: p => p.value ? `${p.value.toFixed(1)}%` : '—',
-      cellStyle: params => {
-        const val = params.value
-        return {
-          fontWeight: '600',
-          color: val > 60 ? '#dc2626' : val < 40 ? '#2563eb' : '#0f766e'
-        }
-      }
-    },
-    {
-      field: 'start_codon',
-      headerName: 'Inicio',
-      width: 80,
-      sortable: true,
-      cellRenderer: CodonCellRenderer,
-      tooltipValueGetter: params => {
-        const codon = params.value
-        if (!codon) return 'Sin codón de inicio detectado'
-        const names = {
-          'ATG': 'ATG (Metionina) - Inicio canónico',
-          'GTG': 'GTG (Valina) - Inicio alternativo',
-          'TTG': 'TTG (Leucina) - Inicio alternativo',
-          'CTG': 'CTG (Leucina) - Inicio raro'
-        }
-        return names[codon] || `${codon} - Codón de inicio`
-      }
-    },
-    {
-      field: 'stop_codon',
-      headerName: 'Parada',
-      width: 80,
-      sortable: true,
-      cellRenderer: CodonCellRenderer,
-      tooltipValueGetter: params => {
-        const codon = params.value
-        if (!codon) return 'Sin codón de parada detectado'
-        const names = {
-          'TAA': 'TAA (Ocre) - Codón de parada',
-          'TAG': 'TAG (Ámbar) - Codón de parada',
-          'TGA': 'TGA (Ópalo) - Codón de parada'
-        }
-        return names[codon] || `${codon} - Codón de parada`
-      }
-    },
-    {
-      field: 'has_introns',
-      headerName: 'Intrón',
-      width: 75,
-      sortable: true,
-      cellRenderer: params => {
-        const hasIntrons = params.value
-        return hasIntrons
-          ? <span style={{ fontSize: '11px', fontWeight: '600', color: '#ea580c' }}>Sí</span>
-          : <span style={{ fontSize: '11px', color: '#94a3b8' }}>No</span>
-      },
-      tooltipValueGetter: params => params.value
-        ? 'Gen con intrones (splicing detectado)'
-        : 'Gen sin intrones (secuencia continua)'
-    },
-    {
-      field: 'protein_id',
-      headerName: 'Protein ID',
-      width: 130,
-      sortable: true,
-      filter: true,
-      valueGetter: params => params.data.protein_id || null,
-      valueFormatter: params => params.value || '—',
-      cellStyle: params => ({
-        fontFamily: params.value ? 'monospace' : 'inherit',
-        fontSize: params.value ? '11px' : '12px',
-        color: params.value ? '#7c3aed' : '#94a3b8',
-        fontWeight: params.value ? '500' : 'normal',
-        fontStyle: params.value ? 'normal' : 'italic'
-      }),
-      tooltipValueGetter: params => params.value || 'Sin ID de proteína asignado'
-    },
-    {
-      field: 'product',
-      headerName: 'Producto / Función',
-      flex: 1,
-      minWidth: 220,
-      sortable: true,
-      filter: true,
-      tooltipField: 'product',
-      cellStyle: { fontSize: '12px', lineHeight: '1.4' },
-      valueFormatter: p => p.value || 'Proteína hipotética'
-    },
-  ], [])
+  const handleSearch = (e) => {
+    e.preventDefault()
+    setPage(1)
+    loadTableData(1, searchTerm)
+  }
 
-  // Strand distribution
-  const strandStats = useMemo(() => {
-    if (!paginatedGenes.genes.length) return null
-    const fwd = paginatedGenes.genes.filter(g => g.strand === 1).length
-    const rev = paginatedGenes.genes.filter(g => g.strand === -1).length
-    const total = fwd + rev
-    return { fwd, rev, total, fwdPct: ((fwd / total) * 100).toFixed(1), revPct: ((rev / total) * 100).toFixed(1) }
-  }, [paginatedGenes.genes])
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return
+    setPage(newPage)
+    loadTableData(newPage, searchTerm)
+  }
 
   if (!geneData) {
     return (
-      <div className="text-center py-20">
-        <div className="w-20 h-20 mx-auto bg-slate-100 rounded-2xl flex items-center justify-center mb-6">
-          <svg className="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-          </svg>
-        </div>
-        <h2 className="text-xl font-bold text-slate-700 mb-2">Sin datos de genes</h2>
-        <p className="text-slate-500">Ejecute el análisis completo para ver las estadísticas</p>
+      <div className="flex flex-col items-center justify-center py-48">
+        <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8"></div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizando Dataset Génico...</p>
       </div>
     )
   }
 
-  const sizeHistogramData = useMemo(() => {
-    if (!paginatedGenes.genes.length) return []
-    const bins = [
-      { range: '0-300', min: 0, max: 300, count: 0 },
-      { range: '300-600', min: 300, max: 600, count: 0 },
-      { range: '600-900', min: 600, max: 900, count: 0 },
-      { range: '900-1.2K', min: 900, max: 1200, count: 0 },
-      { range: '1.2-1.5K', min: 1200, max: 1500, count: 0 },
-      { range: '1.5-2K', min: 1500, max: 2000, count: 0 },
-      { range: '2-3K', min: 2000, max: 3000, count: 0 },
-      { range: '3K+', min: 3000, max: Infinity, count: 0 },
-    ]
-    paginatedGenes.genes.forEach(gene => {
-      const bin = bins.find(b => gene.length >= b.min && gene.length < b.max)
-      if (bin) bin.count++
-    })
-    return bins
-  }, [paginatedGenes.genes])
+  const lengthDistributionData = [
+    { name: '0-300 pb', count: geneData.length_distribution?.['0-300'] || 0 },
+    { name: '300-600 pb', count: geneData.length_distribution?.['300-600'] || 0 },
+    { name: '600-900 pb', count: geneData.length_distribution?.['600-900'] || 0 },
+    { name: '900-1.2K pb', count: geneData.length_distribution?.['900-1200'] || 0 },
+    { name: '1.2-1.5K pb', count: geneData.length_distribution?.['1200-1500'] || 0 },
+    { name: '1.5-2K pb', count: geneData.length_distribution?.['1500-2000'] || 0 },
+    { name: '2-3K pb', count: geneData.length_distribution?.['2000-3000'] || 0 },
+    { name: '3K+ pb', count: geneData.length_distribution?.['3000+'] || 0 },
+  ]
 
-  const gcScatterData = useMemo(() => {
-    return paginatedGenes.genes.slice(0, 200).map(gene => ({
-      x: gene.length, y: gene.gc_content, locus: gene.locus_tag
+  const scatterData = useMemo(() => {
+    if (!geneData.genes) return []
+    return geneData.genes.slice(0, 1000).map(g => ({
+      length: g.length,
+      gc: g.gc_content,
+      name: g.locus_tag
     }))
-  }, [paginatedGenes.genes])
+  }, [geneData])
+
+  const currentPageStats = {
+    avgSize: paginatedGenes.length > 0 ? (paginatedGenes.reduce((s, g) => s + g.length, 0) / paginatedGenes.length).toFixed(0) : 0,
+    avgGC: paginatedGenes.length > 0 ? (paginatedGenes.reduce((s, g) => s + g.gc_content, 0) / paginatedGenes.length).toFixed(1) : 0,
+    forward: paginatedGenes.filter(g => g.strand === 1).length,
+    reverse: paginatedGenes.filter(g => g.strand === -1).length,
+    namedCount: paginatedGenes.filter(g => g.gene_name).length,
+    proteinIdCount: paginatedGenes.filter(g => g.protein_id).length,
+    highGC: paginatedGenes.filter(g => g.gc_content > 60).length,
+    lowGC: paginatedGenes.filter(g => g.gc_content < 40).length,
+    intronCount: paginatedGenes.filter(g => g.has_introns).length,
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl p-5 text-white">
-          <p className="text-teal-100 text-sm">Total de Genes</p>
-          <p className="text-2xl font-bold mt-1">{geneData.total_genes.toLocaleString()}</p>
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Tarjetas de Métricas Principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Total de Genes</p>
+          <p className="text-3xl font-black text-slate-900 tracking-tighter">{geneData.total_genes?.toLocaleString() || '0'}</p>
         </div>
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
-          <p className="text-emerald-100 text-sm">Total de CDS</p>
-          <p className="text-2xl font-bold mt-1">{geneData.total_cds.toLocaleString()}</p>
+        <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 leading-none">Total de CDS</p>
+          <p className="text-3xl font-black text-blue-700 tracking-tighter">{geneData.total_cds?.toLocaleString() || '0'}</p>
         </div>
-        <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl p-5 text-white">
-          <p className="text-slate-300 text-sm">Densidad Génica</p>
-          <p className="text-2xl font-bold mt-1">{geneData.gene_density}</p>
-          <p className="text-slate-400 text-xs">genes/Mb</p>
+        <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 leading-none">Densidad Génica</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-indigo-700 tracking-tighter">{geneData.gene_density || '0.00'}</p>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tight">genes/Mb</p>
+          </div>
         </div>
-        <div className="bg-gradient-to-br from-teal-600 to-emerald-600 rounded-xl p-5 text-white">
-          <p className="text-teal-100 text-sm">Contenido GC</p>
-          <p className="text-2xl font-bold mt-1">{geneData.gc_content}%</p>
+        <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl shadow-blue-900/20 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000"></div>
+          <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-3 leading-none">Contenido GC</p>
+          <p className="text-3xl font-black tracking-tighter text-white">{geneData.gc_content || '0.00'}%</p>
         </div>
       </div>
 
-      {/* Size Statistics */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="font-semibold text-slate-800 mb-4">Estadísticas de Tamaño de Genes</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {/* Estadísticas Detalladas de Tamaño */}
+      <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none"><span className="text-6xl">📏</span></div>
+        <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">Estadísticas de Tamaño de Genes</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 relative z-10">
           {[
-            { label: 'Media', value: geneData.size_statistics.mean.toFixed(0), unit: 'bp' },
-            { label: 'Mediana', value: geneData.size_statistics.median.toFixed(0), unit: 'bp' },
-            { label: 'Mínimo', value: geneData.size_statistics.min, unit: 'bp', color: 'text-teal-700' },
-            { label: 'Máximo', value: geneData.size_statistics.max.toLocaleString(), unit: 'bp', color: 'text-red-600' },
-            { label: 'Desv. Est.', value: geneData.size_statistics.std.toFixed(0), unit: 'bp' },
-          ].map((stat, i) => (
-            <div key={i} className="text-center p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500 uppercase">{stat.label}</p>
-              <p className={`text-xl font-bold ${stat.color || 'text-slate-800'}`}>{stat.value}</p>
-              <p className="text-xs text-slate-400">{stat.unit}</p>
+            { label: 'Media', val: geneData.size_statistics?.mean || 0, color: 'text-slate-900' },
+            { label: 'Mediana', val: geneData.size_statistics?.median || 0, color: 'text-slate-900' },
+            { label: 'Mínimo', val: geneData.size_statistics?.min || 0, color: 'text-blue-700' },
+            { label: 'Máximo', val: geneData.size_statistics?.max || 0, color: 'text-rose-700' },
+            { label: 'Desv. Est.', val: geneData.size_statistics?.std || 0, color: 'text-slate-600' }
+          ].map(stat => (
+            <div key={stat.label} className="space-y-1">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</p>
+              <div className="flex items-baseline gap-1">
+                <p className={`text-2xl font-black tracking-tighter ${stat.color}`}>{Math.round(stat.val).toLocaleString()}</p>
+                <span className="text-[9px] font-bold text-slate-400 uppercase">pb</span>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Histogram */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-800 mb-4">Distribución de Tamaños</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={sizeHistogramData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="range" tick={{ fontSize: 10, fill: '#64748b' }} angle={-45} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
-              <Tooltip
-                formatter={(value) => [value, 'Genes']}
-                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
-              />
-              <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+      {/* Gráficos de Análisis */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+          <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">Distribución de Tamaños</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={lengthDistributionData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#475569' }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+              <Bar dataKey="count" name="Cantidad" fill="#2563eb" radius={[8, 8, 0, 0]} barSize={32}>
+                {lengthDistributionData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Scatter Plot */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-800 mb-4">GC% vs Longitud</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <ScatterChart margin={{ bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis
-                dataKey="x" type="number" name="Longitud"
-                tick={{ fontSize: 12, fill: '#64748b' }}
-                label={{ value: 'Longitud (bp)', position: 'bottom', offset: 0, fontSize: 11, fill: '#64748b' }}
-              />
-              <YAxis
-                dataKey="y" type="number" name="GC%"
-                tick={{ fontSize: 12, fill: '#64748b' }}
-                domain={[20, 80]}
-              />
-              <ZAxis range={[20, 20]} />
-              <Tooltip
-                cursor={{ strokeDasharray: '3 3' }}
-                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
-              />
-              <Scatter data={gcScatterData} fill="#10b981" opacity={0.6} />
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+          <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">GC% vs Longitud (pb)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <ScatterChart>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis type="number" dataKey="length" name="Longitud" unit=" pb" axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#475569'}} />
+              <YAxis type="number" dataKey="gc" name="GC%" unit="%" axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#475569'}} domain={['auto', 'auto']} />
+              <ZAxis type="category" dataKey="name" name="Locus" />
+              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+              <Scatter name="Genes" data={scatterData} fill="#4f46e5" fillOpacity={0.6} />
             </ScatterChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Gene Table */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-          <h3 className="font-semibold text-slate-800">
-            Lista de Genes ({paginatedGenes.total.toLocaleString()} total)
-          </h3>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Buscar por locus o producto..."
-                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm w-48 sm:w-64"
-              />
-              <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+      {/* Módulo Principal: Tabla de Genes */}
+      <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+        <div className="p-10 border-b border-slate-50 bg-slate-50/30 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter italic">Lista de Genes</h3>
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-1">Sincronizado: {totalGenesCount.toLocaleString()} registros detectados</p>
+          </div>
+          
+          <form onSubmit={handleSearch} className="relative group">
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por locus o producto..."
+              className="pl-12 pr-24 py-3 bg-white border-2 border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-900 focus:outline-none focus:border-blue-500 transition-all w-full lg:w-96 placeholder-slate-400"
+            />
+            <svg className="w-5 h-5 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5} /></svg>
+            <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg active:scale-95">Buscar</button>
+          </form>
+        </div>
+
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[1300px]">
+            <thead>
+              <tr className="bg-white border-b border-slate-100">
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Nombre</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Inicio</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Locus Tag</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Fin</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Extensión</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center min-w-[140px]">Hebra</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">GC%</th>
+                <th className="px-4 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Inicio</th>
+                <th className="px-4 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Parada</th>
+                <th className="px-4 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Intrón</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Proteína ID</th>
+                <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest min-w-[300px]">Producto</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loadingTable ? (
+                <tr>
+                  <td colSpan="12" className="px-8 py-24 text-center">
+                    <div className="w-10 h-10 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Indexando Base de Datos...</p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedGenes.map((gene, i) => (
+                  <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-6 py-5">
+                      <span className="text-[10px] font-black text-blue-700 uppercase bg-blue-50 px-2 py-1 rounded-md border border-blue-100">{gene.gene_name || '—'}</span>
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono text-[10px] font-bold text-slate-600">{gene.start.toLocaleString()}</td>
+                    <td className="px-6 py-5">
+                      <span className="font-mono text-[10px] font-black text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{gene.locus_tag}</span>
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono text-[10px] font-bold text-slate-600">{gene.end.toLocaleString()}</td>
+                    <td className="px-6 py-5 text-right">
+                      <span className="font-mono text-xs font-black text-slate-900 tracking-tighter">{gene.length.toLocaleString()} <span className="text-[9px] text-slate-400 font-bold">pb</span></span>
+                    </td>
+                    <td className="px-6 py-5 text-center whitespace-nowrap">
+                      <span className={`inline-block text-[9px] font-black px-3 py-1 rounded-full border shadow-sm ${gene.strand === 1 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}>
+                        {gene.strand === 1 ? '→ 5\'→3\'' : '← 3\'→5\''}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono text-xs font-black text-blue-700">{gene.gc_content.toFixed(1)}%</td>
+                    <td className="px-4 py-5 text-center">
+                      <span className="font-mono text-[10px] font-black text-slate-800">{gene.start_codon || '—'}</span>
+                    </td>
+                    <td className="px-4 py-5 text-center">
+                      <span className="font-mono text-[10px] font-black text-slate-800">{gene.stop_codon || '—'}</span>
+                    </td>
+                    <td className="px-4 py-5 text-center">
+                      <span className={`text-[9px] font-black uppercase ${gene.has_introns ? 'text-rose-700' : 'text-slate-400'}`}>{gene.has_introns ? 'SÍ' : 'No'}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className="font-mono text-[10px] font-bold text-slate-600 group-hover:text-blue-600 transition-colors">{gene.protein_id || '—'}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="text-[10px] font-bold text-slate-700 uppercase leading-relaxed line-clamp-1 group-hover:line-clamp-none transition-all duration-500">{gene.product || 'Proteína funcional hipotética'}</p>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación y Resumen de Página */}
+        <div className="p-10 bg-slate-50/50 border-t border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-8">
+          <div className="flex gap-10">
+            <div className="space-y-1">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">En esta página</p>
+              <p className="text-xl font-black text-slate-900">{paginatedGenes.length}</p>
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
-            >
-              Buscar
-            </button>
+            <div className="space-y-1 border-l border-slate-200 pl-10">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Tamaño promedio</p>
+              <p className="text-xl font-black text-slate-900">{currentPageStats.avgSize} <span className="text-xs font-bold text-slate-500 uppercase">pb</span></p>
+            </div>
+            <div className="space-y-1 border-l border-slate-200 pl-10">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">GC% promedio</p>
+              <p className="text-xl font-black text-blue-700">{currentPageStats.avgGC}%</p>
+            </div>
           </div>
-        </div>
 
-        <div className="ag-theme-alpine" style={{ height: 500, width: '100%' }}>
-          <AgGridReact
-            rowData={paginatedGenes.genes}
-            columnDefs={columnDefs}
-            defaultColDef={{
-              resizable: true,
-              sortable: true,
-              filter: false,
-            }}
-            animateRows={true}
-            pagination={false}
-            loading={isLoading}
-            rowHeight={38}
-            headerHeight={42}
-            suppressHorizontalScroll={false}
-            enableCellTextSelection={true}
-            ensureDomOrder={true}
-            overlayLoadingTemplate='<div style="padding:20px;"><div style="border:3px solid #14b8a6;border-top-color:transparent;border-radius:50%;width:40px;height:40px;animation:spin 0.8s linear infinite;margin:0 auto 10px;"></div><span style="color:#64748b;">Cargando genes...</span></div>'
-            overlayNoRowsTemplate='<div style="padding:30px;color:#64748b;"><svg style="width:48px;height:48px;margin:0 auto 10px;display:block;opacity:0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p style="font-weight:500;margin-bottom:5px;">No se encontraron genes</p><p style="font-size:12px;">Intenta modificar los filtros de búsqueda</p></div>'
-          />
-        </div>
-
-        {/* Quick Stats under table */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-200">
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-1">Genes en esta página</p>
-            <p className="text-lg font-bold text-slate-800">{paginatedGenes.genes.length}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-1">Total de genes</p>
-            <p className="text-lg font-bold text-teal-700">{paginatedGenes.total.toLocaleString()}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-1">Tamaño promedio</p>
-            <p className="text-lg font-bold text-slate-800">
-              {paginatedGenes.genes.length > 0
-                ? Math.round(paginatedGenes.genes.reduce((sum, g) => sum + g.length, 0) / paginatedGenes.genes.length).toLocaleString()
-                : '—'} bp
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-1">GC% promedio</p>
-            <p className="text-lg font-bold text-slate-800">
-              {paginatedGenes.genes.length > 0
-                ? (paginatedGenes.genes.reduce((sum, g) => sum + (g.gc_content || 0), 0) / paginatedGenes.genes.length).toFixed(1)
-                : '—'}%
-            </p>
-          </div>
-        </div>
-
-        {paginatedGenes.total_pages > 1 && (
-          <div className="flex justify-center items-center gap-2 mt-4">
-            <button
-              onClick={() => loadGenes(currentPage - 1, searchQuery)}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 text-sm"
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1 || loadingTable}
+              className="px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 disabled:opacity-30 transition-all shadow-sm active:scale-95"
             >
               Anterior
             </button>
-            <span className="text-sm text-slate-600">
-              Página {currentPage} de {paginatedGenes.total_pages}
-            </span>
-            <button
-              onClick={() => loadGenes(currentPage + 1, searchQuery)}
-              disabled={currentPage === paginatedGenes.total_pages}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 text-sm"
+            <div className="px-8 py-3 bg-white rounded-2xl border-2 border-slate-100 text-[10px] font-black uppercase tracking-widest shadow-inner text-slate-900">
+              Página <span className="text-blue-700">{page}</span> de {totalPages}
+            </div>
+            <button 
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages || loadingTable}
+              className="px-6 py-3 bg-white border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 disabled:opacity-30 transition-all shadow-sm active:scale-95"
             >
               Siguiente
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Info Box — Strand Distribution */}
-      {strandStats && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h3 className="font-semibold text-slate-800 mb-3">Distribución por Hebras</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-teal-50 border border-teal-100 rounded-lg p-4 text-center">
-              <p className="text-xs text-teal-700 uppercase font-medium">→ Hebra Forward (5'→3')</p>
-              <p className="text-2xl font-bold text-teal-700 mt-1">{strandStats.fwd.toLocaleString()}</p>
-              <p className="text-sm text-teal-600">{strandStats.fwdPct}%</p>
-            </div>
-            <div className="bg-violet-50 border border-violet-100 rounded-lg p-4 text-center">
-              <p className="text-xs text-violet-700 uppercase font-medium">← Hebra Reverse (3'→5')</p>
-              <p className="text-2xl font-bold text-violet-700 mt-1">{strandStats.rev.toLocaleString()}</p>
-              <p className="text-sm text-violet-600">{strandStats.revPct}%</p>
-            </div>
-            <div className="flex flex-col justify-center">
-              <p className="text-xs text-slate-500 mb-2">Proporción Forward / Reverse</p>
-              <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
-                <div className="bg-teal-400 h-full transition-all" style={{ width: `${strandStats.fwdPct}%` }}></div>
-                <div className="bg-violet-400 h-full transition-all" style={{ width: `${strandStats.revPct}%` }}></div>
-              </div>
-              <div className="flex justify-between mt-1 text-xs text-slate-500">
-                <span>5'→3' ({strandStats.fwdPct}%)</span>
-                <span>3'→5' ({strandStats.revPct}%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Categorías de Genes por Tamaño */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="font-semibold text-slate-800 mb-4">Categorías por Tamaño de Gen</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            {
-              label: 'Muy Pequeños',
-              range: '< 300 bp',
-              count: paginatedGenes.genes.filter(g => g.length < 300).length,
-              color: 'bg-blue-50 border-blue-200 text-blue-700'
-            },
-            {
-              label: 'Pequeños',
-              range: '300-900 bp',
-              count: paginatedGenes.genes.filter(g => g.length >= 300 && g.length < 900).length,
-              color: 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            },
-            {
-              label: 'Medianos',
-              range: '900-1500 bp',
-              count: paginatedGenes.genes.filter(g => g.length >= 900 && g.length < 1500).length,
-              color: 'bg-amber-50 border-amber-200 text-amber-700'
-            },
-            {
-              label: 'Grandes',
-              range: '≥ 1500 bp',
-              count: paginatedGenes.genes.filter(g => g.length >= 1500).length,
-              color: 'bg-red-50 border-red-200 text-red-700'
-            }
-          ].map((cat, i) => (
-            <div key={i} className={`${cat.color} border rounded-lg p-4 text-center`}>
-              <p className="text-xs font-medium uppercase tracking-wide mb-1">{cat.label}</p>
-              <p className="text-2xl font-bold mb-1">{cat.count}</p>
-              <p className="text-xs opacity-75">{cat.range}</p>
-            </div>
-          ))}
         </div>
       </div>
 
-      {/* Genes con Características Especiales */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Genes Nombrados</p>
-              <p className="text-2xl font-bold text-slate-800 mt-1">
-                {paginatedGenes.genes.filter(g => g.gene_name).length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-teal-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-xs text-slate-600">Genes con nombre asignado</p>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Con Proteína ID</p>
-              <p className="text-2xl font-bold text-slate-800 mt-1">
-                {paginatedGenes.genes.filter(g => g.protein_id).length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-xs text-slate-600">Genes con ID de proteína</p>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Alto contenido GC</p>
-              <p className="text-2xl font-bold text-slate-800 mt-1">
-                {paginatedGenes.genes.filter(g => g.gc_content > 60).length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-xs text-slate-600">GC% mayor a 60%</p>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Bajo contenido GC</p>
-              <p className="text-2xl font-bold text-slate-800 mt-1">
-                {paginatedGenes.genes.filter(g => g.gc_content < 40).length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-xs text-slate-600">GC% menor a 40%</p>
-        </div>
-      </div>
-
-      {/* Info Box - Resumen */}
-      <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 rounded-xl p-5">
-        <div className="flex gap-4">
-          <div className="w-10 h-10 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-teal-900 mb-2">Resumen del Genoma</h4>
-            <div className="text-sm text-teal-800 space-y-1">
-              <p>
-                Este genoma contiene <strong className="font-bold">{geneData.total_genes.toLocaleString()}</strong> genes,
-                de los cuales <strong className="font-bold">{geneData.total_cds.toLocaleString()}</strong> son CDS (secuencias codificantes de proteínas).
-              </p>
-              <p>
-                Contenido GC: <strong className="font-bold">{geneData.gc_content}%</strong> •
-                Densidad génica: <strong className="font-bold">{geneData.gene_density} genes/Mb</strong>
-              </p>
-              <div className="mt-3 pt-3 border-t border-teal-200 text-xs space-y-1">
-                <p>
-                  <strong>Hebra Forward (→ 5'→3')</strong>: Genes codificados en la misma dirección que la secuencia de referencia.
-                </p>
-                <p>
-                  <strong>Hebra Reverse (← 3'→5')</strong>: Genes codificados en la hebra complementaria (antisentido).
-                </p>
+      {/* Distribución por Hebras y Categorías */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm flex flex-col">
+          <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">Distribución por Hebras</h3>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Sentido (5\'→3\')', value: currentPageStats.forward },
+                    { name: 'Antisentido (3\'→5\')', value: currentPageStats.reverse }
+                  ]}
+                  cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={10} dataKey="value"
+                >
+                  <Cell fill="#2563eb" cornerRadius={10} />
+                  <Cell fill="#4f46e5" cornerRadius={10} />
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                <Legend verticalAlign="bottom" iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="w-full grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-slate-50">
+              <div className="text-center">
+                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">→ Hebra Forward (5\'→3\')</p>
+                <p className="text-2xl font-black text-slate-900">{currentPageStats.forward}</p>
+                <p className="text-[10px] font-bold text-slate-600">{((currentPageStats.forward / (paginatedGenes.length || 1)) * 100).toFixed(1)}%</p>
+              </div>
+              <div className="text-center border-l border-slate-100">
+                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">← Hebra Reverse (3\'→5\')</p>
+                <p className="text-2xl font-black text-slate-900">{currentPageStats.reverse}</p>
+                <p className="text-[10px] font-bold text-slate-600">{((currentPageStats.reverse / (paginatedGenes.length || 1)) * 100).toFixed(1)}%</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+          <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">Categorías por Tamaño de Gen</h3>
+          <div className="space-y-4">
+            {[
+              { label: 'Muy Pequeños', desc: '< 300 bp', count: geneData.length_distribution?.['0-300'], color: 'bg-cyan-500' },
+              { label: 'Pequeños', desc: '300-900 bp', count: (geneData.length_distribution?.['300-600'] || 0) + (geneData.length_distribution?.['600-900'] || 0), color: 'bg-blue-500' },
+              { label: 'Medianos', desc: '900-1500 bp', count: (geneData.length_distribution?.['900-1200'] || 0) + (geneData.length_distribution?.['1200-1500'] || 0), color: 'bg-indigo-500' },
+              { label: 'Grandes', desc: '≥ 1500 bp', count: (geneData.length_distribution?.['1500-2000'] || 0) + (geneData.length_distribution?.['2000-3000'] || 0) + (geneData.length_distribution?.['3000+'] || 0), color: 'bg-violet-600' }
+            ].map(cat => (
+              <div key={cat.label} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:border-blue-200 transition-all shadow-sm">
+                <div>
+                  <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{cat.label}</p>
+                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{cat.desc}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-lg font-black text-slate-900">{cat.count?.toLocaleString()}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${cat.color} group-hover:animate-pulse shadow-sm`}></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Info Box - Codones e Intrones */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Codones */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-            Codones de Inicio y Parada
-          </h4>
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium text-slate-700 mb-2">Codones de Inicio:</p>
-              <div className="space-y-1.5 ml-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200">ATG</span>
-                  <span className="text-xs text-slate-600">Metionina - Inicio canónico (más común)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200">GTG</span>
-                  <span className="text-xs text-slate-600">Valina - Inicio alternativo</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200">TTG</span>
-                  <span className="text-xs text-slate-600">Leucina - Inicio alternativo</span>
-                </div>
-              </div>
+      {/* Estadísticas de Composición */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: 'Genes Nombrados', val: currentPageStats.namedCount, desc: 'Genes con nombre asignado', icon: '🏷️' },
+          { label: 'Con Proteína ID', val: currentPageStats.proteinIdCount, desc: 'Genes con ID de proteína', icon: '🔑' },
+          { label: 'Alto contenido GC', val: currentPageStats.highGC, desc: 'GC% mayor a 60%', icon: '🔥' },
+          { label: 'Bajo contenido GC', val: currentPageStats.lowGC, desc: 'GC% menor a 40%', icon: '❄️' }
+        ].map(item => (
+          <div key={item.label} className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
+            <div className="flex justify-between items-start mb-4">
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{item.label}</p>
+              <span className="text-lg">{item.icon}</span>
             </div>
-            <div>
-              <p className="font-medium text-slate-700 mb-2">Codones de Parada:</p>
-              <div className="space-y-1.5 ml-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">TAA</span>
-                  <span className="text-xs text-slate-600">Ocre - Codón de parada</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">TAG</span>
-                  <span className="text-xs text-slate-600">Ámbar - Codón de parada</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">TGA</span>
-                  <span className="text-xs text-slate-600">Ópalo - Codón de parada</span>
-                </div>
-              </div>
-            </div>
+            <p className="text-3xl font-black text-slate-900 mb-2">{item.val}</p>
+            <p className="text-[9px] font-bold text-slate-600 uppercase">{item.desc}</p>
           </div>
+        ))}
+      </div>
+
+      {/* Resumen del Genoma y Glosario */}
+      <div className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl shadow-blue-900/20 space-y-12 overflow-hidden relative">
+        <div className="absolute bottom-0 right-0 p-12 opacity-5 pointer-events-none"><span className="text-9xl font-black italic">GENOME</span></div>
+        <div className="space-y-6 relative z-10">
+          <h4 className="text-2xl font-black uppercase italic tracking-tighter text-blue-400">Resumen del Genoma</h4>
+          <p className="text-sm font-medium text-slate-200 leading-relaxed max-w-4xl">
+            Este genoma contiene <span className="text-white font-black">{geneData.total_genes?.toLocaleString()} genes</span>, 
+            de los cuales <span className="text-white font-black">{geneData.total_cds?.toLocaleString()} son CDS</span> (secuencias codificantes de proteínas). 
+            La arquitectura genómica presenta un <span className="text-blue-400 font-black">Contenido GC de {geneData.gc_content}%</span> y una 
+            <span className="text-indigo-400 font-black"> Densidad génica de {geneData.gene_density} genes/Mb</span>.
+          </p>
         </div>
 
-        {/* Intrones y Exones */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </span>
-            Intrones y Exones
-          </h4>
-          <div className="space-y-3 text-sm text-slate-700">
-            <div>
-              <p className="font-medium mb-1">Exones:</p>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Secuencias codificantes que se mantienen en el mRNA maduro y se traducen a proteínas.
-                En procariotas, la mayoría de genes son continuos (solo exones).
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
+          <div className="space-y-6">
+            <h5 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Hebra y Dirección</h5>
+            <div className="space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                <span className="text-white font-bold block mb-1">Hebra Forward (→ 5'→3'):</span> Genes codificados en la misma dirección que la secuencia de referencia.
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                <span className="text-white font-bold block mb-1">Hebra Reverse (← 3'→5'):</span> Genes codificados en la hebra complementaria (antisentido).
               </p>
             </div>
-            <div>
-              <p className="font-medium mb-1">Intrones:</p>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Secuencias no codificantes que se eliminan durante el splicing del RNA.
-                Raros en procariotas, comunes en eucariotas.
-              </p>
+          </div>
+          <div className="space-y-6 border-l border-white/5 pl-8">
+            <h5 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Codones de Inicio y Parada</h5>
+            <div className="space-y-4">
+              <p className="text-[10px] text-slate-300 font-bold uppercase"><span className="text-white">Inicio:</span> ATG (Metionina), GTG (Valina) y TTG (Leucina).</p>
+              <p className="text-[10px] text-slate-300 font-bold uppercase"><span className="text-white">Parada:</span> TAA (Ocre), TAG (Ámbar) y TGA (Ópalo).</p>
             </div>
-            <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 mt-3">
-              <p className="text-xs text-purple-800">
-                <strong>Nota:</strong> Los genes marcados con "Sí" en la columna Intrón tienen ubicaciones compuestas
-                (compound locations), indicando posible splicing o secuencias discontinuas.
-              </p>
-            </div>
-            <div className="text-xs text-slate-500 mt-2">
-              <p>
-                <strong>Genes con intrones:</strong> {paginatedGenes.genes.filter(g => g.has_introns).length} de {paginatedGenes.genes.length} en esta página
-              </p>
-            </div>
+          </div>
+          <div className="space-y-6 border-l border-white/5 pl-8">
+            <h5 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">Intrones y Exones</h5>
+            <p className="text-xs text-slate-300 leading-relaxed font-medium">
+              En procariotas, la mayoría de los genes son continuos (<span className="text-white">solo exones</span>). 
+              Los genes con <span className="text-emerald-400">Intrones</span> detectados indican ubicaciones compuestas o posibles eventos de splicing bacteriano.
+            </p>
+            <p className="text-[10px] font-black text-slate-400 uppercase">Genes con intrones: {currentPageStats.intronCount} de {paginatedGenes.length} en esta página</p>
           </div>
         </div>
       </div>

@@ -1,273 +1,275 @@
 /**
- * FunctionalCategories Component
- * Classify genes into COG-like functional categories
- * with horizontal bar charts and expandable gene lists
+ * FunctionalCategories Component — Clean Laboratory Edition
+ * COG Functional classification with interactive charts and detailed table.
  */
 import { useState, useEffect, useMemo } from 'react'
-import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, PieChart, Pie, Cell
-} from 'recharts'
 import api from '../services/api'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend
+} from 'recharts'
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">{label}</p>
+        <p className="text-xs font-bold text-white uppercase tracking-tight">
+          Genes: <span className="text-blue-200">{payload[0].value}</span>
+        </p>
+      </div>
+    )
+  }
+  return null
+}
 
 export default function FunctionalCategories() {
-    const [data, setData] = useState(null)
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [expandedCat, setExpandedCat] = useState(null)
-    const [viewMode, setViewMode] = useState('chart') // 'chart' | 'table'
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('visual')
 
-    useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+  }, [])
 
-    const loadData = async () => {
-        setLoading(true)
-        setError(null)
-        try {
-            const result = await api.getFunctionalCategories()
-            setData(result)
-        } catch (e) {
-            setError(e.response?.data?.detail || 'Error clasificando genes')
-        } finally {
-            setLoading(false)
-        }
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const result = await api.getFunctionalCategories()
+      setData(result)
+    } catch (e) {
+      console.error("Error cargando categorías COG:", e)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const chartData = useMemo(() => {
-        if (!data?.categories) return []
-        return data.categories.map(c => ({
-            name: `${c.code} - ${c.name}`,
-            code: c.code,
-            count: c.count,
-            fill: c.color,
-            shortName: c.name.length > 25 ? c.name.slice(0, 22) + '...' : c.name,
-        }))
-    }, [data])
+  const chartData = useMemo(() => {
+    if (!data?.categories) return []
+    return data.categories.map(c => ({
+      code: c.code,
+      name: c.name,
+      count: c.count,
+      color: c.color
+    }))
+  }, [data])
 
-    const pieData = useMemo(() => {
-        if (!data?.categories) return []
-        const top = data.categories.slice(0, 8)
-        const others = data.categories.slice(8)
-        const result = top.map(c => ({ name: c.name, value: c.count, color: c.color }))
-        if (others.length > 0) {
-            result.push({
-                name: 'Otros',
-                value: others.reduce((s, c) => s + c.count, 0) + (data.uncategorized || 0),
-                color: '#94a3b8'
-            })
-        }
-        return result
-    }, [data])
+  const pieData = useMemo(() => {
+    if (!data) return []
+    return [
+      { name: 'Clasificados', value: data.categorized, fill: '#2563eb' },
+      { name: 'Sin Clasificar', value: data.uncategorized, fill: '#cbd5e1' }
+    ]
+  }, [data])
 
-    if (error) {
-        return (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-                <p className="text-amber-700 font-medium">⚠️ {error}</p>
-                <p className="text-amber-600 text-sm mt-2">Active un genoma primero.</p>
-            </div>
-        )
-    }
-
-    if (loading) {
-        return (
-            <div className="text-center py-16">
-                <div className="w-12 h-12 border-3 border-teal-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-slate-500">Clasificando genes en categorías funcionales...</p>
-            </div>
-        )
-    }
-
-    if (!data) return null
-
-    const categorizedPct = data.total_cds > 0 ? ((data.categorized / data.total_cds) * 100).toFixed(1) : 0
-
+  if (loading && !data) {
     return (
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-xl font-bold text-slate-800">📋 Categorías Funcionales (COG)</h2>
-                <p className="text-sm text-slate-500">
-                    {data.organism} — {data.categorized.toLocaleString()} de {data.total_cds.toLocaleString()} CDS clasificados ({categorizedPct}%)
-                </p>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl p-4 text-white">
-                    <p className="text-teal-100 text-xs">Total CDS</p>
-                    <p className="text-2xl font-bold">{data.total_cds.toLocaleString()}</p>
-                </div>
-                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white">
-                    <p className="text-emerald-100 text-xs">Clasificados</p>
-                    <p className="text-2xl font-bold">{data.categorized.toLocaleString()}</p>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs text-slate-500">Sin Clasificar</p>
-                    <p className="text-2xl font-bold text-slate-600">{data.uncategorized.toLocaleString()}</p>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs text-slate-500">Categorías</p>
-                    <p className="text-2xl font-bold text-slate-800">{data.categories.length}</p>
-                </div>
-            </div>
-
-            {/* Coverage bar */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-slate-500">Cobertura de clasificación</span>
-                    <span className="text-xs font-bold text-slate-700">{categorizedPct}%</span>
-                </div>
-                <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
-                    {data.top_categories.map((cat, i) => (
-                        <div key={i} className="h-full transition-all"
-                            style={{
-                                width: `${(cat.count / data.total_cds * 100)}%`,
-                                backgroundColor: cat.color,
-                            }}
-                            title={`${cat.code}: ${cat.name} (${cat.count})`}
-                        ></div>
-                    ))}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                    {data.top_categories.slice(0, 6).map((cat, i) => (
-                        <span key={i} className="flex items-center gap-1 text-[10px] text-slate-600">
-                            <span className="w-2 h-2 rounded" style={{ backgroundColor: cat.color }}></span>
-                            {cat.code}
-                        </span>
-                    ))}
-                </div>
-            </div>
-
-            {/* View toggle */}
-            <div className="flex gap-2">
-                {[
-                    { id: 'chart', label: '📊 Gráficos' },
-                    { id: 'table', label: '📋 Tabla Detallada' },
-                ].map(v => (
-                    <button key={v.id} onClick={() => setViewMode(v.id)}
-                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${viewMode === v.id
-                            ? 'bg-teal-600 text-white'
-                            : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-300'
-                            }`}>
-                        {v.label}
-                    </button>
-                ))}
-            </div>
-
-            {viewMode === 'chart' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Horizontal Bar Chart */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-5">
-                        <h3 className="font-semibold text-slate-800 mb-4 text-sm">Genes por Categoría</h3>
-                        <ResponsiveContainer width="100%" height={chartData.length * 30 + 40}>
-                            <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                                <XAxis type="number" tick={{ fontSize: 10, fill: '#64748b' }} />
-                                <YAxis type="category" dataKey="code" tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} width={25} />
-                                <Tooltip
-                                    formatter={(value, _, props) => [value, props.payload.name]}
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
-                                />
-                                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                                    {chartData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.fill} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* Pie Chart */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-5">
-                        <h3 className="font-semibold text-slate-800 mb-4 text-sm">Distribución</h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart>
-                                <Pie data={pieData} dataKey="value" nameKey="name"
-                                    cx="50%" cy="50%" outerRadius={110} innerRadius={60} paddingAngle={2}>
-                                    {pieData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value) => [value, 'Genes']} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                        <div className="grid grid-cols-2 gap-1 mt-2">
-                            {pieData.map((p, i) => (
-                                <span key={i} className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                                    <span className="w-2 h-2 rounded flex-shrink-0" style={{ backgroundColor: p.color }}></span>
-                                    <span className="truncate">{p.name}</span>
-                                    <span className="ml-auto font-bold">{p.value}</span>
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Detailed Table */}
-            {viewMode === 'table' && (
-                <div className="space-y-2">
-                    {data.categories.map((cat) => (
-                        <div key={cat.code} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                            <button onClick={() => setExpandedCat(expandedCat === cat.code ? null : cat.code)}
-                                className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-50 transition-colors">
-                                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs"
-                                    style={{ backgroundColor: cat.color }}>
-                                    {cat.code}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-800">{cat.name}</p>
-                                    <p className="text-xs text-slate-500">{cat.count} genes ({(cat.count / data.total_cds * 100).toFixed(1)}%)</p>
-                                </div>
-                                {/* Mini bar */}
-                                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
-                                    <div className="h-full rounded-full" style={{
-                                        width: `${Math.min(100, (cat.count / (data.categories[0]?.count || 1)) * 100)}%`,
-                                        backgroundColor: cat.color
-                                    }}></div>
-                                </div>
-                                <span className="font-bold text-slate-800 text-sm w-12 text-right">{cat.count}</span>
-                                <span className={`text-slate-400 transition-transform ${expandedCat === cat.code ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-
-                            {expandedCat === cat.code && cat.sample_genes && (
-                                <div className="border-t border-slate-100 p-4 bg-slate-50/50">
-                                    <p className="text-xs text-slate-500 mb-2">
-                                        Mostrando {Math.min(20, cat.sample_genes.length)} de {cat.count} genes
-                                    </p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                                        {cat.sample_genes.map((g, i) => (
-                                            <div key={i} className="flex items-baseline gap-2 text-xs py-0.5">
-                                                <code className="text-teal-700 font-mono bg-teal-50 px-1 rounded">{g.locus_tag}</code>
-                                                {g.gene_name && <span className="font-bold text-slate-700">{g.gene_name}</span>}
-                                                <span className="text-slate-500 truncate">{g.product}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Info */}
-            <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                <div className="flex gap-3">
-                    <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="text-sm text-teal-800 space-y-1">
-                        <p><strong>COG (Clusters of Orthologous Groups)</strong>: Sistema de clasificación funcional desarrollado por NCBI. Agrupa proteínas en categorías según su función (metabolismo, transporte, regulación, etc.).</p>
-                        <p className="text-xs text-teal-700">
-                            La clasificación se realiza por análisis de keywords en las descripciones de productos génicos.
-                            Las categorías principales son: <strong>J</strong> (Traducción), <strong>K</strong> (Transcripción),
-                            <strong> L</strong> (Replicación), <strong>C</strong> (Energía), <strong>E</strong> (Aminoácidos),
-                            <strong> G</strong> (Carbohidratos), <strong>M</strong> (Membrana), <strong>T</strong> (Señales).
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div className="flex flex-col items-center justify-center py-48">
+        <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
+        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em] animate-pulse text-center">Catalogando Funciones...</p>
+      </div>
     )
+  }
+
+  if (!data) return null
+
+  return (
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 bg-white p-10 rounded-[3rem] border-2 border-slate-100 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] -mr-32 -mt-32"></div>
+        <div className="space-y-4 relative z-10">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
+            Categorías <span className="text-blue-600">Funcionales (COG)</span>
+          </h2>
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="px-4 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-blue-100 shadow-sm">
+              {data.organism || 'Genoma en Análisis'}
+            </span>
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest italic">
+              {data.categorized} de {data.total_cds} CDS clasificados ({((data.categorized/data.total_cds)*100).toFixed(1)}%)
+            </p>
+          </div>
+        </div>
+        
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 relative z-10">
+          {[
+            { id: 'visual', label: 'Gráficos', icon: '📊' },
+            { id: 'table', label: 'Tabla Detallada', icon: '📋' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary Header Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: 'Total CDS', val: data.total_cds, icon: 'bg-slate-900', text: 'text-white' },
+          { label: 'Clasificados', val: data.categorized, icon: 'bg-blue-600', text: 'text-blue-600' },
+          { label: 'Sin Clasificar', val: data.uncategorized, icon: 'bg-slate-400', text: 'text-slate-400' },
+          { label: 'Categorías', val: data.categories?.length, icon: 'bg-indigo-600', text: 'text-indigo-600' }
+        ].map((item, i) => (
+          <div key={i} className={`${item.icon === 'bg-slate-900' ? 'bg-slate-900 text-white shadow-blue-900/20 shadow-2xl' : 'bg-white border-2 border-slate-100 shadow-sm'} rounded-[2rem] p-8 group hover:border-blue-200 transition-all relative overflow-hidden`}>
+            {item.icon === 'bg-slate-900' && <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000"></div>}
+            <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${item.icon === 'bg-slate-900' ? 'text-blue-400' : 'text-slate-400'}`}>{item.label}</p>
+            <p className="text-3xl font-black tracking-tighter">{item.val?.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      {activeTab === 'visual' && (
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-700">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Pie Chart: Coverage */}
+            <div className="lg:col-span-1 bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm flex flex-col items-center">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">Cobertura de Clasificación</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} cornerRadius={10} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                  <Legend verticalAlign="bottom" iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-8 pt-8 border-t border-slate-50 w-full text-center">
+                <p className="text-4xl font-black text-blue-600 tracking-tighter">{((data.categorized/data.total_cds)*100).toFixed(1)}%</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">Éxito de Catalogación</p>
+              </div>
+            </div>
+
+            {/* Bar Chart: Distribution */}
+            <div className="lg:col-span-2 bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10 text-center">Genes por Categoría Principal</h3>
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={chartData.slice(0, 12)}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="code" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#1e293b' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={35}>
+                    {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Detailed Distribution Cards */}
+          <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-10 shadow-sm">
+            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">Distribución de Roles Biológicos</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {chartData.map((cat) => (
+                <div key={cat.code} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 group hover:border-blue-200 hover:bg-white transition-all shadow-sm">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-blue-900/10" style={{ backgroundColor: cat.color }}>
+                        {cat.code}
+                      </div>
+                      <div className="space-y-1">
+                        <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-tight leading-tight max-w-[180px]">{cat.name}</h5>
+                        <p className="text-[9px] font-bold text-slate-400">Categoría COG</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-black text-slate-900">{cat.count}</span>
+                  </div>
+                  <div className="w-full h-1 bg-white rounded-full overflow-hidden">
+                    <div className="h-full transition-all duration-1000 shadow-sm" style={{ backgroundColor: cat.color, width: `${(cat.count / data.total_cds) * 100 * 5}%` }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'table' && (
+        <div className="bg-white rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-sm animate-in zoom-in-95 duration-500">
+          <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Diccionario Funcional Detallado</h3>
+            <div className="flex gap-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dataset: {data.organism}</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-[700px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left">
+              <thead className="bg-white sticky top-0 z-10 border-b border-slate-100">
+                <tr>
+                  <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Código</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest">Categoría Funcional</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Cantidad</th>
+                  <th className="px-6 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Porcentaje</th>
+                  <th className="px-10 py-6 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Distribución</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {data.categories?.map((cat, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-10 py-5">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-[10px] shadow-sm" style={{ backgroundColor: cat.color }}>
+                        {cat.code}
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{cat.name}</p>
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono text-xs font-black text-slate-700">{cat.count.toLocaleString()}</td>
+                    <td className="px-6 py-5 text-right font-mono text-xs font-black text-blue-600">
+                      {((cat.count / data.total_cds) * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-10 py-5">
+                      <div className="flex items-center justify-end gap-4">
+                        <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full transition-all duration-1000 shadow-sm" style={{ backgroundColor: cat.color, width: `${(cat.count / data.total_cds) * 100 * 5}%` }}></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Glossary & Technical Definition */}
+      <div className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl shadow-blue-900/20 space-y-8 overflow-hidden relative">
+        <div className="absolute bottom-0 right-0 p-12 opacity-5 pointer-events-none text-9xl font-black italic">COG</div>
+        <div className="space-y-4 relative z-10">
+          <h4 className="text-xl font-black uppercase tracking-widest text-blue-400">Sistema de Clasificación COG</h4>
+          <p className="text-sm text-slate-300 leading-relaxed font-medium max-w-4xl">
+            El sistema <span className="text-white font-black">COG (Clusters of Orthologous Groups)</span> es un modelo desarrollado por el NCBI para la anotación funcional de proteínas basada en relaciones evolutivas. Agrupa secuencias ortólogas que comparten funciones biológicas fundamentales a través de distintos linajes genómicos.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10 pt-6 border-t border-white/5">
+          <p className="text-xs text-slate-400 leading-relaxed font-medium">
+            <span className="text-blue-400 font-bold block mb-2">Metodología de Análisis:</span> La clasificación se realiza mediante el procesamiento de palabras clave en las descripciones de productos génicos, mapeándolas contra descriptores estandarizados de roles metabólicos, regulatorios y estructurales.
+          </p>
+          <p className="text-xs text-slate-400 leading-relaxed font-medium">
+            <span className="text-indigo-400 font-bold block mb-2">Categorías Críticas:</span> El motor resalta funciones esenciales como <span className="text-white">Traducción (J)</span>, <span className="text-white">Transcripción (K)</span> y <span className="text-white">Metabolismo Energético (C)</span>, fundamentales para la viabilidad celular del MG1655.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
 }

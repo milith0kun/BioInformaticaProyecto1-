@@ -1,338 +1,164 @@
 /**
- * AIValidation Component
- * Displays AI-powered scientific validation results with bioinformatics focus
- * All findings reference NCBI GenBank/PubMed with direct links
+ * AIValidation Component — Clean Laboratory Edition
+ * Performs AI-driven audit and shows technical validation against reference standards
  */
+import { api } from '../services/api'
+import toast from 'react-hot-toast'
 
-export default function AIValidation({ validationData, isValidating, onValidate, hasAnalysis, comparisonData, selectedGenomes, currentGenome }) {
-  const analysisType = selectedGenomes && selectedGenomes.length > 1 ? 'comparison' : 'single'
+const STATUS_COLORS = {
+  PASS: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  WARNING: 'bg-amber-50 text-amber-700 border-amber-200',
+  FAIL: 'bg-red-50 text-red-700 border-red-200',
+}
 
-  // Build NCBI links for the current genome
-  const genomeAccession = currentGenome?.accession || ''
-  const ncbiLinks = {
-    genome: `https://www.ncbi.nlm.nih.gov/datasets/genome/${genomeAccession}/`,
-    nucleotide: `https://www.ncbi.nlm.nih.gov/nuccore/${genomeAccession}`,
-    genbank: `https://www.ncbi.nlm.nih.gov/nuccore/${genomeAccession}?report=genbank`,
-    protein: `https://www.ncbi.nlm.nih.gov/protein/?term=${genomeAccession}`,
-    gene: `https://www.ncbi.nlm.nih.gov/gene/?term=${genomeAccession}`,
-    assembly: `https://www.ncbi.nlm.nih.gov/assembly/?term=${genomeAccession}`,
-  }
+// Simple Markdown Parser (Duplicated for independence)
+const MarkdownText = ({ content }) => {
+  if (!content) return null
+  const lines = content.split('\n')
+  return (
+    <div className="space-y-3 font-sans text-slate-600 leading-relaxed">
+      {lines.map((line, i) => {
+        if (line.startsWith('### ')) return <h4 key={i} className="text-sm font-black text-blue-600 mt-6 mb-2 uppercase tracking-wide">{line.replace('### ', '')}</h4>
+        if (line.startsWith('## ')) return <h3 key={i} className="text-base font-black text-slate-800 mt-8 mb-4 border-b border-blue-100 pb-2">{line.replace('## ', '')}</h3>
+        if (line.startsWith('# ')) return <h2 key={i} className="text-xl font-black text-slate-900 mt-8 mb-4">{line.replace('# ', '')}</h2>
+        if (line.trim().startsWith('- ')) return <div key={i} className="flex gap-3 ml-4"><span className="text-blue-400 font-bold">•</span><p className="flex-1" dangerouslySetInnerHTML={{ __html: parseInline(line.replace('- ', '')) }} /></div>
+        if (!line.trim()) return <div key={i} className="h-2"></div>
+        return <p key={i} dangerouslySetInnerHTML={{ __html: parseInline(line) }} />
+      })}
+    </div>
+  )
+}
 
-  if (!hasAnalysis && !comparisonData) {
-    return (
-      <div className="text-center py-20">
-        <div className="max-w-xl mx-auto">
-          <div className="w-20 h-20 mx-auto bg-slate-100 rounded-2xl flex items-center justify-center mb-6">
-            <svg className="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
+const parseInline = (text) => {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-800">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em class="text-slate-500">$1</em>')
+    .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono text-pink-600 font-bold">$1</code>')
+}
+
+export default function AIValidation({
+  validationData,
+  technicalValidation,
+  isValidating,
+  onValidate,
+  hasAnalysis
+}) {
+  return (
+    <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* AI Orchestrator Header */}
+      <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-blue-900/20 group">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] -mr-32 -mt-32 rounded-full transition-transform group-hover:scale-110 duration-1000"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-blue-400">Verificación <span className="text-white">IA Antrópica</span></h2>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Auditoría bioinformática automatizada</p>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-3">Validación Científica con IA</h2>
-          <p className="text-slate-600">
-            Primero ejecute el análisis para validar con IA.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (isValidating) {
-    return (
-      <div className="text-center py-20">
-        <div className="w-16 h-16 mx-auto border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mb-6"></div>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Consultando Claude AI...</h2>
-        <p className="text-slate-500">Validando resultados contra referencias científicas de NCBI</p>
-      </div>
-    )
-  }
-
-  if (!validationData) {
-    return (
-      <div className="text-center py-20">
-        <div className="max-w-xl mx-auto">
-          <div className="w-20 h-20 mx-auto bg-teal-50 rounded-2xl flex items-center justify-center mb-6">
-            <svg className="w-10 h-10 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-3">Validación Científica con IA</h2>
-          <p className="text-slate-600 mb-4">
-            {analysisType === 'comparison' ? (
+          <button
+            onClick={onValidate}
+            disabled={isValidating || !hasAnalysis}
+            className="px-10 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40 disabled:opacity-50 active:scale-95 flex items-center gap-4 group/btn"
+          >
+            {isValidating ? (
               <>
-                Use <strong>Claude AI</strong> para validar la comparación de {selectedGenomes?.length || 0} genomas
-                contra literatura científica de NCBI.
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                Procesando Auditoría...
               </>
             ) : (
               <>
-                Use <strong>Claude AI</strong> para validar los resultados contra conocimiento científico
-                referenciado en <a href={ncbiLinks.genome} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">NCBI GenBank</a>.
+                <span>Iniciar Validación</span>
+                <span className="text-lg group-hover/btn:translate-x-1 transition-transform">🛡️</span>
               </>
             )}
-          </p>
-          <button
-            onClick={onValidate}
-            className="px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-semibold hover:from-teal-700 hover:to-emerald-700 transition-all shadow-lg"
-          >
-            Ejecutar Validación Científica {analysisType === 'comparison' ? '(Comparación)' : ''}
           </button>
         </div>
       </div>
-    )
-  }
 
-  const { codon_validation, gene_validation, comprehensive_validation } = validationData
-
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 85) return 'bg-emerald-500'
-    if (confidence >= 70) return 'bg-amber-500'
-    return 'bg-red-500'
-  }
-
-  const getConfidenceBg = (confidence) => {
-    if (confidence >= 85) return 'bg-emerald-50 border-emerald-200'
-    if (confidence >= 70) return 'bg-amber-50 border-amber-200'
-    return 'bg-red-50 border-red-200'
-  }
-
-  const ValidationCard = ({ title, subtitle, validation }) => (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-4 border-b border-slate-200">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h3 className="font-semibold text-slate-800">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
-          </div>
-          <div className="flex items-center gap-3">
-            {/* Confidence Meter */}
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${getConfidenceColor(validation.confidence)} transition-all`}
-                  style={{ width: `${validation.confidence}%` }}
-                />
-              </div>
-              <span className="text-sm font-bold text-slate-700">{validation.confidence}%</span>
+      {/* Technical Validation Table */}
+      {technicalValidation && (
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 overflow-hidden shadow-sm animate-in slide-in-from-bottom-4 duration-500">
+          <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+            <div>
+              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em]">Métricas de Referencia</h3>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativa vs Rangos Bacterianos</p>
             </div>
-            {/* Status Badge */}
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${validation.is_valid
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-amber-100 text-amber-700'
-              }`}>
-              {validation.is_valid ? 'VÁLIDO' : 'REVISAR'}
-            </span>
+            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${STATUS_COLORS[technicalValidation.overall_status]}`}>
+              {technicalValidation.overall_status === 'PASS' ? '✅ NORMAL' : '⚠️ ATENCIÓN'}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-white border-b border-slate-100">
+                  <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">Métrica</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Referencia</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Desviación</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(technicalValidation.items || []).map((item, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-8 py-5">
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{item.metric.replace(/_/g, ' ')}</p>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <p className="font-mono text-xs font-black text-slate-700">{typeof item.calculated === 'number' ? item.calculated.toLocaleString() : item.calculated}</p>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <p className="font-mono text-xs font-bold text-slate-400">{typeof item.reference === 'number' ? item.reference.toLocaleString() : item.reference}</p>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <p className={`font-mono text-xs font-black ${Math.abs(item.deviation_percent) > 20 ? 'text-rose-500' : 'text-slate-400'}`}>
+                        {item.deviation_percent.toFixed(1)}%
+                      </p>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex justify-center">
+                        <span className={`w-2 h-2 rounded-full ${item.status === 'PASS' ? 'bg-emerald-500' : item.status === 'WARNING' ? 'bg-amber-500' : 'bg-red-500'}`}></span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="p-5 space-y-5">
-        {/* Key Findings */}
-        {validation.key_findings?.length > 0 && (
-          <div className={`rounded-lg p-4 border ${getConfidenceBg(validation.confidence)}`}>
-            <h4 className="text-xs uppercase tracking-wide text-slate-600 font-semibold mb-2">
-              Hallazgos Clave
-            </h4>
-            <ul className="space-y-1">
-              {validation.key_findings.map((finding, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                  <span className="text-emerald-500 mt-1">•</span>
-                  {finding}
-                </li>
-              ))}
-            </ul>
+      {!validationData && !isValidating && (
+        <div className="bg-white rounded-[3rem] border-2 border-dashed border-slate-100 p-20 text-center space-y-6 opacity-60">
+          <div className="w-20 h-20 bg-slate-50 rounded-3xl mx-auto flex items-center justify-center border border-slate-100">
+            <span className="text-3xl grayscale">🛡️</span>
           </div>
-        )}
-
-        {/* Scientific Context */}
-        {validation.scientific_context && (
-          <div>
-            <h4 className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-2">
-              Contexto Científico
-            </h4>
-            <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              {validation.scientific_context}
-            </p>
-          </div>
-        )}
-
-        {/* Interpretation */}
-        <div>
-          <h4 className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-2">
-            Interpretación
-          </h4>
-          <p className="text-sm text-slate-700 leading-relaxed">
-            {validation.interpretation}
-          </p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Esperando inicialización del motor de auditoría</p>
         </div>
+      )}
 
-        {/* Discrepancies */}
-        {validation.discrepancies?.length > 0 && validation.discrepancies[0] !== '' && (
-          <div>
-            <h4 className="text-xs uppercase tracking-wide text-amber-600 font-medium mb-2">
-              Discrepancias Detectadas
-            </h4>
-            <div className="space-y-2">
-              {validation.discrepancies.map((disc, idx) => (
-                <div key={idx} className="flex items-start gap-2 bg-amber-50 p-3 rounded-lg text-sm text-amber-800 border border-amber-100">
-                  <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <span>{disc}</span>
-                </div>
-              ))}
+      {validationData && (
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-10 shadow-sm animate-in slide-in-from-bottom-8 duration-700">
+          <div className="flex items-center gap-4 mb-10 border-b border-slate-50 pb-8">
+            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 border border-blue-100 shadow-sm">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2.5} /></svg>
+            </div>
+            <div>
+              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em]">Reporte de Auditoría IA</h3>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Generado por GenomicAI v2.0</p>
             </div>
           </div>
-        )}
 
-        {/* Recommendations */}
-        {validation.recommendations?.length > 0 && (
-          <div>
-            <h4 className="text-xs uppercase tracking-wide text-teal-600 font-medium mb-2">
-              Recomendaciones
-            </h4>
-            <div className="space-y-2">
-              {validation.recommendations.map((rec, idx) => (
-                <div key={idx} className="flex items-start gap-2 bg-teal-50 p-3 rounded-lg text-sm text-teal-800 border border-teal-100">
-                  <svg className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <span>{rec}</span>
-                </div>
-              ))}
+          <div className="prose prose-slate max-w-none">
+            <div className="bg-slate-50 rounded-[2rem] p-10 border border-slate-100">
+              <MarkdownText content={
+                validationData.comprehensive_validation?.interpretation ||
+                validationData.validation ||
+                (typeof validationData === 'string' ? validationData : JSON.stringify(validationData, null, 2))
+              } />
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-400">
-        Validado: {new Date(validation.timestamp).toLocaleString('es-ES')}
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">✅ Validación Científica</h2>
-          <p className="text-slate-500 text-sm">Análisis por Claude 3.5 Haiku (Anthropic) • Referenciado a NCBI</p>
         </div>
-        <button
-          onClick={onValidate}
-          className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg font-medium hover:from-teal-700 hover:to-emerald-700 transition-all text-sm flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Revalidar
-        </button>
-      </div>
-
-      {/* Comprehensive Validation - Main Card */}
-      <ValidationCard
-        title="Validación Global del Genoma"
-        subtitle={currentGenome ? `${currentGenome.organism_name} (${genomeAccession})` : 'Evaluación integral'}
-        validation={comprehensive_validation}
-      />
-
-      {/* Specific Validations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ValidationCard
-          title="Análisis de Codones"
-          subtitle="ATG, TAA, TAG, TGA + Uso de codones"
-          validation={codon_validation}
-        />
-        <ValidationCard
-          title="Análisis de Genes"
-          subtitle="Anotación, densidad y estadísticas"
-          validation={gene_validation}
-        />
-      </div>
-
-      {/* NCBI Reference Links */}
-      <div className="bg-slate-800 rounded-xl p-5 text-white">
-        <h3 className="font-medium mb-3 flex items-center gap-2">
-          <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Referencias NCBI
-        </h3>
-
-        {/* Current Genome Info */}
-        {currentGenome && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-4">
-            <div>
-              <p className="text-slate-400">Organismo</p>
-              <p className="font-medium">{currentGenome.organism_name}</p>
-            </div>
-            <div>
-              <p className="text-slate-400">Genoma</p>
-              <p className="font-medium">{currentGenome.genome_size?.toLocaleString()} bp</p>
-            </div>
-            <div>
-              <p className="text-slate-400">GC Content</p>
-              <p className="font-medium">{currentGenome.gc_percent}%</p>
-            </div>
-            <div>
-              <p className="text-slate-400">Genes</p>
-              <p className="font-medium">{currentGenome.gene_count?.toLocaleString()}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Links to NCBI */}
-        <div className="flex flex-wrap gap-2">
-          <a href={ncbiLinks.genome} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 NCBI Genome ({genomeAccession})
-          </a>
-          <a href={ncbiLinks.nucleotide} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 Nucleotide Record
-          </a>
-          <a href={ncbiLinks.genbank} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 GenBank Format
-          </a>
-          <a href={ncbiLinks.protein} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 Proteins
-          </a>
-          <a href={ncbiLinks.gene} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 Genes
-          </a>
-          <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(currentGenome?.organism_name || '')}`} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pink-600 hover:bg-pink-500 rounded-lg text-xs font-medium transition-colors">
-            🔗 PubMed Literature
-          </a>
-        </div>
-
-        {/* Comparison genomes links */}
-        {selectedGenomes && selectedGenomes.length > 1 && (
-          <div className="mt-4 pt-4 border-t border-slate-700">
-            <p className="text-slate-400 text-xs mb-2">Genomas comparados:</p>
-            <div className="space-y-1">
-              {selectedGenomes.map((g, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-500">{i + 1}.</span>
-                  <a
-                    href={`https://www.ncbi.nlm.nih.gov/datasets/genome/${g.accession}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-teal-400 hover:text-teal-300 underline font-mono"
-                  >
-                    {g.accession}
-                  </a>
-                  <span className="text-slate-400">{g.organism_name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }

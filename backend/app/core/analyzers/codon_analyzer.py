@@ -101,7 +101,7 @@ class CodonAnalyzer:
         return {
             'mean_per_window': round(mean, 2),
             'median_per_window': round(float(np.median(counts_array)), 2),
-            'std_deviation': round(std_dev, 3),
+            'std_dev': round(std_dev, 3),
             'variance': round(float(np.var(counts_array)), 3),
             'coefficient_of_variation': round(cv, 2),
             'uniformity_score': round(uniformity, 1),

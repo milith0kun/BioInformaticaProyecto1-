@@ -67,32 +67,48 @@ class FileDetector:
             return False
     
     def scan_directory(self, directory: str) -> List[DetectedFile]:
-        """Recursively scan directory for genomic files"""
+        """Recursively scan directory for genomic files with performance tracking"""
+        import time
+        start_time = time.time()
+        print(f"🔍 [SCAN] Iniciando escaneo en: {directory}")
+        
         self.detected_files = []
         
-        for root, dirs, files in os.walk(directory):
-            for filename in files:
-                filepath = os.path.join(root, filename)
-                ext = self._get_extension(filename)
+        # EXCLUDE heavy directories to prevent timeouts
+        EXCLUDE_DIRS = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', 'venv'}
+        
+        try:
+            for root, dirs, files in os.walk(directory):
+                # Prune excluded directories in-place to prevent os.walk from entering them
+                dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
                 
-                if ext in FILE_TYPE_MAP:
-                    try:
-                        size = os.path.getsize(filepath)
-                        file_type = FILE_TYPE_MAP.get(ext, 'Unknown')
-                        
-                        detected = DetectedFile(
-                            filename=filename,
-                            filepath=filepath,
-                            extension=ext,
-                            size_bytes=size,
-                            file_type=file_type
-                        )
-                        self.detected_files.append(detected)
-                    except Exception as e:
-                        print(f"Error scanning file {filepath}: {e}")
+                for filename in files:
+                    filepath = os.path.join(root, filename)
+                    ext = self._get_extension(filename)
+                    
+                    if ext in FILE_TYPE_MAP:
+                        try:
+                            size = os.path.getsize(filepath)
+                            file_type = FILE_TYPE_MAP.get(ext, 'Unknown')
+                            
+                            detected = DetectedFile(
+                                filename=filename,
+                                filepath=filepath,
+                                extension=ext,
+                                size_bytes=size,
+                                file_type=file_type
+                            )
+                            self.detected_files.append(detected)
+                        except Exception as e:
+                            print(f"⚠️ [SCAN] Error en archivo {filename}: {e}")
+        except Exception as e:
+            print(f"🔥 [SCAN] Error crítico durante os.walk: {e}")
         
         # Determine primary file
         self._select_primary_file()
+        
+        duration = time.time() - start_time
+        print(f"✅ [SCAN] Escaneo completado en {duration:.2f}s. Encontrados: {len(self.detected_files)} archivos.")
         
         return self.detected_files
     
