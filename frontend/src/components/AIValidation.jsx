@@ -1,11 +1,23 @@
 /**
  * AIValidation Component
  * Displays AI-powered scientific validation results with bioinformatics focus
+ * All findings reference NCBI GenBank/PubMed with direct links
  */
 
-export default function AIValidation({ validationData, isValidating, onValidate, hasAnalysis, comparisonData, selectedGenomes }) {
+export default function AIValidation({ validationData, isValidating, onValidate, hasAnalysis, comparisonData, selectedGenomes, currentGenome }) {
   const analysisType = selectedGenomes && selectedGenomes.length > 1 ? 'comparison' : 'single'
-  
+
+  // Build NCBI links for the current genome
+  const genomeAccession = currentGenome?.accession || ''
+  const ncbiLinks = {
+    genome: `https://www.ncbi.nlm.nih.gov/datasets/genome/${genomeAccession}/`,
+    nucleotide: `https://www.ncbi.nlm.nih.gov/nuccore/${genomeAccession}`,
+    genbank: `https://www.ncbi.nlm.nih.gov/nuccore/${genomeAccession}?report=genbank`,
+    protein: `https://www.ncbi.nlm.nih.gov/protein/?term=${genomeAccession}`,
+    gene: `https://www.ncbi.nlm.nih.gov/gene/?term=${genomeAccession}`,
+    assembly: `https://www.ncbi.nlm.nih.gov/assembly/?term=${genomeAccession}`,
+  }
+
   if (!hasAnalysis && !comparisonData) {
     return (
       <div className="text-center py-20">
@@ -29,7 +41,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
       <div className="text-center py-20">
         <div className="w-16 h-16 mx-auto border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mb-6"></div>
         <h2 className="text-xl font-bold text-slate-800 mb-2">Consultando Claude AI...</h2>
-        <p className="text-slate-500">Validando resultados científicamente</p>
+        <p className="text-slate-500">Validando resultados contra referencias científicas de NCBI</p>
       </div>
     )
   }
@@ -44,14 +56,16 @@ export default function AIValidation({ validationData, isValidating, onValidate,
             </svg>
           </div>
           <h2 className="text-xl font-bold text-slate-800 mb-3">Validación Científica con IA</h2>
-          <p className="text-slate-600 mb-6">
+          <p className="text-slate-600 mb-4">
             {analysisType === 'comparison' ? (
               <>
-                Use <strong>Claude AI</strong> para validar la comparación de {selectedGenomes?.length || 0} genomas.
+                Use <strong>Claude AI</strong> para validar la comparación de {selectedGenomes?.length || 0} genomas
+                contra literatura científica de NCBI.
               </>
             ) : (
               <>
-                Use <strong>Claude AI</strong> para validar los resultados contra conocimiento científico de <em>E. coli</em>.
+                Use <strong>Claude AI</strong> para validar los resultados contra conocimiento científico
+                referenciado en <a href={ncbiLinks.genome} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">NCBI GenBank</a>.
               </>
             )}
           </p>
@@ -102,8 +116,8 @@ export default function AIValidation({ validationData, isValidating, onValidate,
             </div>
             {/* Status Badge */}
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${validation.is_valid
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-amber-100 text-amber-700'
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-amber-100 text-amber-700'
               }`}>
               {validation.is_valid ? 'VÁLIDO' : 'REVISAR'}
             </span>
@@ -202,8 +216,8 @@ export default function AIValidation({ validationData, isValidating, onValidate,
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Validación Científica</h2>
-          <p className="text-slate-500 text-sm">Análisis por Claude 3.5 Haiku (Anthropic)</p>
+          <h2 className="text-xl font-bold text-slate-800">✅ Validación Científica</h2>
+          <p className="text-slate-500 text-sm">Análisis por Claude 3.5 Haiku (Anthropic) • Referenciado a NCBI</p>
         </div>
         <button
           onClick={onValidate}
@@ -219,7 +233,7 @@ export default function AIValidation({ validationData, isValidating, onValidate,
       {/* Comprehensive Validation - Main Card */}
       <ValidationCard
         title="Validación Global del Genoma"
-        subtitle="Evaluación integral de E. coli K-12 MG1655"
+        subtitle={currentGenome ? `${currentGenome.organism_name} (${genomeAccession})` : 'Evaluación integral'}
         validation={comprehensive_validation}
       />
 
@@ -227,42 +241,97 @@ export default function AIValidation({ validationData, isValidating, onValidate,
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ValidationCard
           title="Análisis de Codones"
-          subtitle="ATG, TAA, TAG, TGA"
+          subtitle="ATG, TAA, TAG, TGA + Uso de codones"
           validation={codon_validation}
         />
         <ValidationCard
           title="Análisis de Genes"
-          subtitle="Anotación y estadísticas"
+          subtitle="Anotación, densidad y estadísticas"
           validation={gene_validation}
         />
       </div>
 
-      {/* Reference Info */}
+      {/* NCBI Reference Links */}
       <div className="bg-slate-800 rounded-xl p-5 text-white">
         <h3 className="font-medium mb-3 flex items-center gap-2">
           <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          Referencia: NC_000913.3
+          Referencias NCBI
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-slate-400">Organismo</p>
-            <p className="font-medium">E. coli K-12 MG1655</p>
+
+        {/* Current Genome Info */}
+        {currentGenome && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-4">
+            <div>
+              <p className="text-slate-400">Organismo</p>
+              <p className="font-medium">{currentGenome.organism_name}</p>
+            </div>
+            <div>
+              <p className="text-slate-400">Genoma</p>
+              <p className="font-medium">{currentGenome.genome_size?.toLocaleString()} bp</p>
+            </div>
+            <div>
+              <p className="text-slate-400">GC Content</p>
+              <p className="font-medium">{currentGenome.gc_percent}%</p>
+            </div>
+            <div>
+              <p className="text-slate-400">Genes</p>
+              <p className="font-medium">{currentGenome.gene_count?.toLocaleString()}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-slate-400">Genoma</p>
-            <p className="font-medium">4,641,652 bp</p>
-          </div>
-          <div>
-            <p className="text-slate-400">GC Content</p>
-            <p className="font-medium">50.79%</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Genes</p>
-            <p className="font-medium">4,651</p>
-          </div>
+        )}
+
+        {/* Links to NCBI */}
+        <div className="flex flex-wrap gap-2">
+          <a href={ncbiLinks.genome} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 NCBI Genome ({genomeAccession})
+          </a>
+          <a href={ncbiLinks.nucleotide} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 Nucleotide Record
+          </a>
+          <a href={ncbiLinks.genbank} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 GenBank Format
+          </a>
+          <a href={ncbiLinks.protein} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 Proteins
+          </a>
+          <a href={ncbiLinks.gene} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 Genes
+          </a>
+          <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(currentGenome?.organism_name || '')}`} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pink-600 hover:bg-pink-500 rounded-lg text-xs font-medium transition-colors">
+            🔗 PubMed Literature
+          </a>
         </div>
+
+        {/* Comparison genomes links */}
+        {selectedGenomes && selectedGenomes.length > 1 && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <p className="text-slate-400 text-xs mb-2">Genomas comparados:</p>
+            <div className="space-y-1">
+              {selectedGenomes.map((g, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">{i + 1}.</span>
+                  <a
+                    href={`https://www.ncbi.nlm.nih.gov/datasets/genome/${g.accession}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-400 hover:text-teal-300 underline font-mono"
+                  >
+                    {g.accession}
+                  </a>
+                  <span className="text-slate-400">{g.organism_name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

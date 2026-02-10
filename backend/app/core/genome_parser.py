@@ -31,6 +31,9 @@ class GeneData:
     gc_content: float
     gene_name: Optional[str] = None
     protein_id: Optional[str] = None
+    start_codon: Optional[str] = None
+    stop_codon: Optional[str] = None
+    has_introns: bool = False
 
 
 @dataclass 
@@ -93,14 +96,26 @@ class GenomeParser:
                 print(f"📏 [PARSER] ... y {len(records)-5} records más")
             
             # Extract genes and CDS from this record
+            # First pass: collect CDS info by locus_tag
+            cds_info = {}
+            for feature in record.features:
+                if feature.type == "CDS":
+                    all_cds_count += 1
+                    qualifiers = feature.qualifiers
+                    locus_tag = qualifiers.get('locus_tag', [None])[0]
+                    if locus_tag:
+                        cds_info[locus_tag] = {
+                            'protein_id': qualifiers.get('protein_id', [None])[0],
+                            'translation': qualifiers.get('translation', [None])[0],
+                            'product': qualifiers.get('product', [None])[0]
+                        }
+
+            # Second pass: extract genes and merge with CDS info
             for feature in record.features:
                 if feature.type == "gene":
-                    gene_data = self._extract_gene_data(feature, record.seq)
+                    gene_data = self._extract_gene_data(feature, record.seq, cds_info)
                     if gene_data:
                         all_genes.append(gene_data)
-                        
-                elif feature.type == "CDS":
-                    all_cds_count += 1
         
         genes = all_genes
         cds_count = all_cds_count
@@ -135,35 +150,67 @@ class GenomeParser:
         
         return genome_data
     
-    def _extract_gene_data(self, feature: SeqFeature, sequence) -> Optional[GeneData]:
+    def _extract_gene_data(self, feature: SeqFeature, sequence, cds_info: dict = None) -> Optional[GeneData]:
         """
         Extract gene data from a SeqFeature using BioPython
-        
+
         Utiliza Bio.SeqFeature para:
         - Obtener ubicación genómica (start, end, strand)
         - Extraer qualifiers (locus_tag, product, protein_id)
         - Extraer la secuencia del gen usando feature.extract()
+        - Detectar codones de inicio y parada
+        - Detectar presencia de intrones (compound locations)
         """
         try:
             # Get location using BioPython's SeqFeature.location
             start = int(feature.location.start)
             end = int(feature.location.end)
             strand = feature.location.strand if feature.location.strand else 1
-            
+
             # Get qualifiers from GenBank annotations
             qualifiers = feature.qualifiers
             locus_tag = qualifiers.get('locus_tag', ['unknown'])[0]
             gene_name = qualifiers.get('gene', [None])[0]
             product = qualifiers.get('product', [None])[0]
-            protein_id = qualifiers.get('protein_id', [None])[0]
-            
+
+            # Get protein_id from CDS info if available (genes don't have protein_id)
+            protein_id = None
+            if cds_info and locus_tag in cds_info:
+                protein_id = cds_info[locus_tag].get('protein_id')
+                # Also get product from CDS if not in gene
+                if not product:
+                    product = cds_info[locus_tag].get('product')
+
             # Extract gene sequence using BioPython's feature.extract()
             # This properly handles strand and compound locations
             gene_seq = feature.extract(sequence)
-            
+
             # Calculate GC content using Bio.SeqUtils.gc_fraction
             gc_content = self._calculate_gc_biopython(gene_seq)
-            
+
+            # Detect start and stop codons (first 3 and last 3 nucleotides)
+            start_codon = None
+            stop_codon = None
+            gene_seq_str = str(gene_seq)
+
+            if len(gene_seq_str) >= 6:  # Minimum length to have start and stop
+                start_codon = gene_seq_str[:3].upper()
+                stop_codon = gene_seq_str[-3:].upper()
+
+                # Validate common start codons
+                valid_start_codons = {'ATG', 'GTG', 'TTG', 'CTG'}
+                if start_codon not in valid_start_codons:
+                    start_codon = None  # Mark as unusual
+
+                # Validate stop codons
+                valid_stop_codons = {'TAA', 'TAG', 'TGA'}
+                if stop_codon not in valid_stop_codons:
+                    stop_codon = None  # Mark as unusual
+
+            # Check for introns (compound location indicates splicing)
+            # In prokaryotes this is rare, but can happen in some cases
+            has_introns = hasattr(feature.location, 'parts') and len(feature.location.parts) > 1
+
             return GeneData(
                 locus_tag=locus_tag,
                 start=start,
@@ -173,7 +220,10 @@ class GenomeParser:
                 product=product,
                 gc_content=gc_content,
                 gene_name=gene_name,
-                protein_id=protein_id
+                protein_id=protein_id,
+                start_codon=start_codon,
+                stop_codon=stop_codon,
+                has_introns=has_introns
             )
         except Exception as e:
             print(f"Error extracting gene data: {e}")

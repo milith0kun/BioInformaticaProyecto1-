@@ -156,7 +156,12 @@ async def analyze_genes(request: Request):
                 length=g["length"],
                 strand=g["strand"],
                 product=g["product"],
-                gc_content=g["gc_content"]
+                gc_content=g["gc_content"],
+                gene_name=g.get("gene_name"),
+                protein_id=g.get("protein_id"),
+                start_codon=g.get("start_codon"),
+                stop_codon=g.get("stop_codon"),
+                has_introns=g.get("has_introns", False)
             )
             for g in result.genes
         ]

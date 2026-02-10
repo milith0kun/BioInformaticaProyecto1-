@@ -106,7 +106,12 @@ class GeneAnalyzer:
                 "length": g.length,
                 "strand": g.strand,
                 "product": g.product,
-                "gc_content": g.gc_content
+                "gc_content": g.gc_content,
+                "gene_name": getattr(g, 'gene_name', None),
+                "protein_id": getattr(g, 'protein_id', None),
+                "start_codon": getattr(g, 'start_codon', None),
+                "stop_codon": getattr(g, 'stop_codon', None),
+                "has_introns": getattr(g, 'has_introns', False)
             }
             for g in genes
         ]

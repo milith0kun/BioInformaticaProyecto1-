@@ -177,7 +177,7 @@ export const api = {
   },
 
   // ================== COMPARACIÓN GENÓMICA ==================
-  
+
   // Obtener cepas de E. coli relacionadas
   getRelatedStrains: async (category = null) => {
     const params = category ? { category } : {}
@@ -222,6 +222,174 @@ export const api = {
   // Obtener resumen de grupos funcionales
   getGeneGroupsSummary: async () => {
     const response = await axiosInstance.get('/genome/genes/groups-summary')
+    return response.data
+  },
+
+  // ================== NCBI ENHANCED ==================
+
+  // Proteins
+  getProteins: async (page = 1, pageSize = 50, search = '') => {
+    const params = { page, page_size: pageSize }
+    if (search) params.search = search
+    const response = await axiosInstance.get('/ncbi/proteins', { params })
+    return response.data
+  },
+
+  getProteinDetail: async (proteinId) => {
+    const response = await axiosInstance.get(`/ncbi/protein/${proteinId}`)
+    return response.data
+  },
+
+  // Gene Location
+  getGeneAtPosition: async (position) => {
+    const response = await axiosInstance.get(`/ncbi/gene-at-position/${position}`)
+    return response.data
+  },
+
+  getGeneDetail: async (locusTag) => {
+    const response = await axiosInstance.get(`/ncbi/gene-detail/${locusTag}`)
+    return response.data
+  },
+
+  // Sequence Viewer
+  getSequenceSegment: async (start = 0, end = 1000) => {
+    const response = await axiosInstance.get('/ncbi/sequence', { params: { start, end } })
+    return response.data
+  },
+
+  // Complete Codon Usage
+  getCompleteCodonUsage: async () => {
+    const response = await axiosInstance.get('/ncbi/codon-usage')
+    return response.data
+  },
+
+  // Genome Map
+  getGenomeMapData: async () => {
+    const response = await axiosInstance.get('/ncbi/genome-map')
+    return response.data
+  },
+
+  // Literature
+  searchLiterature: async (query, maxResults = 8) => {
+    const response = await axiosInstance.get('/ncbi/literature/search', {
+      params: { query, max_results: maxResults }
+    })
+    return response.data
+  },
+
+  getGenBankReference: async (accession) => {
+    const response = await axiosInstance.get(`/ncbi/genbank-reference/${accession}`)
+    return response.data
+  },
+
+  // ================== AI CHAT ==================
+
+  sendChatMessage: async (message, sessionId = 'default', includeGenomeContext = true) => {
+    const response = await axiosInstance.post('/chat/message', {
+      message,
+      session_id: sessionId,
+      include_genome_context: includeGenomeContext
+    })
+    return response.data
+  },
+
+  getChatHistory: async (sessionId = 'default') => {
+    const response = await axiosInstance.get(`/chat/history/${sessionId}`)
+    return response.data
+  },
+
+  clearChatHistory: async (sessionId = 'default') => {
+    const response = await axiosInstance.delete(`/chat/history/${sessionId}`)
+    return response.data
+  },
+
+  getChatSuggestions: async () => {
+    const response = await axiosInstance.get('/chat/suggestions')
+    return response.data
+  },
+
+  // ================== NCBI SEARCH ==================
+
+  searchNCBIGene: async (query, organism = '', maxResults = 5) => {
+    const response = await axiosInstance.get('/ncbi/search-gene', {
+      params: { query, organism, max_results: maxResults }
+    })
+    return response.data
+  },
+
+  searchNCBINucleotide: async (query, maxResults = 3) => {
+    const response = await axiosInstance.get('/ncbi/search-nucleotide', {
+      params: { query, max_results: maxResults }
+    })
+    return response.data
+  },
+
+  // ================== CENTRAL DOGMA ==================
+
+  getCentralDogma: async (locusTag) => {
+    const response = await axiosInstance.get(`/ncbi/central-dogma/${locusTag}`)
+    return response.data
+  },
+
+  // ================== GC SLIDING WINDOW ==================
+
+  getGCSlidingWindow: async (windowSize = 5000, step = 1000) => {
+    const response = await axiosInstance.get('/ncbi/gc-window', {
+      params: { window_size: windowSize, step }
+    })
+    return response.data
+  },
+
+  // ================== BLAST SEARCH ==================
+
+  submitBLAST: async (sequence, program = 'blastn', database = 'nt', maxHits = 10) => {
+    const response = await axiosInstance.post('/ncbi/blast/submit', {
+      sequence, program, database, max_hits: maxHits
+    })
+    return response.data
+  },
+
+  getBLASTResults: async (rid) => {
+    const response = await axiosInstance.get(`/ncbi/blast/results/${rid}`)
+    return response.data
+  },
+
+  // ================== RNA ANALYSIS ==================
+
+  getRNAAnalysis: async () => {
+    const response = await axiosInstance.get('/ncbi/rna-analysis')
+    return response.data
+  },
+
+  // ================== GENOME SUMMARY ==================
+
+  getGenomeSummary: async () => {
+    const response = await axiosInstance.get('/ncbi/genome-summary')
+    return response.data
+  },
+
+  // ================== FUNCTIONAL CATEGORIES ==================
+
+  getFunctionalCategories: async () => {
+    const response = await axiosInstance.get('/ncbi/functional-categories')
+    return response.data
+  },
+
+  // ================== CAI ANALYSIS ==================
+
+  getCAIAnalysis: async (topN = 50) => {
+    const response = await axiosInstance.get('/ncbi/cai-analysis', {
+      params: { top_n: topN }
+    })
+    return response.data
+  },
+
+  // ================== PHYLOGENETIC TREE ==================
+
+  getPhylogeneticTree: async (genbankPaths = []) => {
+    const response = await axiosInstance.post('/ncbi/phylogenetic-tree', {
+      genbank_paths: genbankPaths
+    })
     return response.data
   },
 }

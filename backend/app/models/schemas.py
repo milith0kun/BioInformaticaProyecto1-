@@ -62,6 +62,11 @@ class GeneInfo(BaseModel):
     strand: int
     product: Optional[str] = None
     gc_content: float
+    gene_name: Optional[str] = None
+    protein_id: Optional[str] = None
+    start_codon: Optional[str] = None
+    stop_codon: Optional[str] = None
+    has_introns: bool = False
 
 
 class GeneAnalysisResponse(BaseModel):

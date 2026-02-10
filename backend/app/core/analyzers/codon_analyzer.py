@@ -70,7 +70,7 @@ class CodonAnalyzer:
             }
         
         # Dividir genoma en ventanas
-        window_size = genome_length // num_windows
+        window_size = max(1, genome_length // num_windows)
         count_per_window = [0] * num_windows
         
         for pos in positions:
