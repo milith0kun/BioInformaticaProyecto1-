@@ -248,10 +248,10 @@ export default function ProteinStructureViewer({
                 <div className="bg-slate-50/50 backdrop-blur-2xl border-b border-slate-200 px-10 flex-shrink-0">
                     <div className="flex gap-10 overflow-x-auto scrollbar-hide">
                         {[
-                            { id: 'tertiary', label: 'Estructura 3D/4D', icon: '💎' },
-                            { id: 'primary', label: 'Secuencia', icon: '🧬' },
-                            { id: 'secondary', label: 'Secundaria', icon: '🌀' },
-                            { id: 'composition', label: 'Residuos', icon: '📊' },
+                            { id: 'tertiary', label: 'Estructura 3D/4D' },
+                            { id: 'primary', label: 'Secuencia' },
+                            { id: 'secondary', label: 'Secundaria' },
+                            { id: 'composition', label: 'Residuos' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -259,13 +259,10 @@ export default function ProteinStructureViewer({
                                 className={`group relative py-6 text-[10px] font-black uppercase tracking-[0.25em] transition-all whitespace-nowrap ${
                                     activeTab === tab.id
                                         ? 'text-blue-600'
-                                        : 'text-slate-400 hover:text-slate-600'
+                                        : 'text-slate-500 hover:text-slate-900'
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <span className={`transition-transform duration-500 group-hover:scale-110 ${activeTab === tab.id ? 'scale-110' : 'opacity-40'}`}>
-                                        {tab.icon}
-                                    </span>
                                     <span>{tab.label}</span>
                                 </div>
                                 {activeTab === tab.id && (

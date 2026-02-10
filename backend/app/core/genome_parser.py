@@ -34,6 +34,8 @@ class GeneData:
     start_codon: Optional[str] = None
     stop_codon: Optional[str] = None
     has_introns: bool = False
+    translation: Optional[str] = None  # Protein sequence
+    db_xrefs: Optional[List[str]] = None  # Database cross-references
 
 
 @dataclass 
@@ -46,6 +48,7 @@ class GenomeData:
     accession: str
     genes: List[GeneData]
     cds_count: int
+    genbank_filepath: Optional[str] = None  # Store original file path
     
 
 class GenomeParser:
@@ -107,7 +110,8 @@ class GenomeParser:
                         cds_info[locus_tag] = {
                             'protein_id': qualifiers.get('protein_id', [None])[0],
                             'translation': qualifiers.get('translation', [None])[0],
-                            'product': qualifiers.get('product', [None])[0]
+                            'product': qualifiers.get('product', [None])[0],
+                            'db_xrefs': qualifiers.get('db_xref', [])
                         }
 
             # Second pass: extract genes and merge with CDS info
@@ -141,7 +145,8 @@ class GenomeParser:
             organism=organism,
             accession=accession,
             genes=genes,
-            cds_count=cds_count
+            cds_count=cds_count,
+            genbank_filepath=filepath
         )
         
         # Cache result
@@ -175,8 +180,12 @@ class GenomeParser:
 
             # Get protein_id from CDS info if available (genes don't have protein_id)
             protein_id = None
+            translation = None
+            db_xrefs = None
             if cds_info and locus_tag in cds_info:
                 protein_id = cds_info[locus_tag].get('protein_id')
+                translation = cds_info[locus_tag].get('translation')
+                db_xrefs = cds_info[locus_tag].get('db_xrefs')
                 # Also get product from CDS if not in gene
                 if not product:
                     product = cds_info[locus_tag].get('product')
@@ -223,7 +232,9 @@ class GenomeParser:
                 protein_id=protein_id,
                 start_codon=start_codon,
                 stop_codon=stop_codon,
-                has_introns=has_introns
+                has_introns=has_introns,
+                translation=translation,
+                db_xrefs=db_xrefs
             )
         except Exception as e:
             print(f"Error extracting gene data: {e}")

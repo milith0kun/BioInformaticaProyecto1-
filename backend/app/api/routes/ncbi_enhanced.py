@@ -22,34 +22,49 @@ router = APIRouter()
 
 
 def _get_genbank_path(request: Request) -> str:
-    """Get the active GenBank file path with auto-recovery"""
+    """Get the active GenBank file path with auto-recovery
+    
+    Priority order:
+    1. Use currently detected active genome
+    2. Auto-scan and activate first available genome from genomes/ folder
+    3. Raise 404 if no genomes found
+    """
     file_detector = request.app.state.file_detector
 
-    # Auto-recovery: If no files detected, try to find any available genome
-    if not file_detector.detected_files:
-        project_root = file_detector.project_root
-        print(f"🔍 [RECOVERY] No active genome, searching in {project_root}/genomes")
-        
-        # Look into genomes folder
-        genomes_dir = os.path.join(project_root, "genomes")
-        if os.path.exists(genomes_dir):
-            for entry in os.listdir(genomes_dir):
-                if entry.startswith(("GCF_", "GCA_")):
-                    # Found a potential genome, try to activate it
-                    target = os.path.join(genomes_dir, entry, "extracted")
-                    if os.path.exists(target):
-                        print(f"✅ [RECOVERY] Auto-activating: {entry}")
-                        file_detector.scan_directory(target)
-                        break
-
+    # Step 1: Check if there's an active genome already
     genbank_file = file_detector.get_genbank_file()
-    if not genbank_file:
-        print("❌ [RECOVERY] No GenBank file found anywhere.")
-        raise HTTPException(
-            status_code=404,
-            detail="No hay un genoma activo. Por favor, selecciona y analiza un genoma en la pestaña Inicio."
-        )
-    return genbank_file.filepath
+    if genbank_file:
+        return genbank_file.filepath
+
+    # Step 2: Auto-recovery - Try to find and activate any available genome
+    project_root = file_detector.project_root
+    genomes_dir = os.path.join(project_root, "genomes")
+    
+    if os.path.exists(genomes_dir):
+        print(f"🔍 [RECOVERY] No active genome, searching in {genomes_dir}")
+        
+        # Sort to get consistent genome selection (prefer GCF over GCA)
+        entries = sorted([e for e in os.listdir(genomes_dir) if e.startswith(("GCF_", "GCA_"))],
+                        key=lambda x: (0 if x.startswith("GCF_") else 1, x))
+        
+        for entry in entries:
+            extracted_dir = os.path.join(genomes_dir, entry, "extracted")
+            if os.path.exists(extracted_dir):
+                # Check if there's a .gbff file
+                gbff_files = [f for f in os.listdir(extracted_dir) if f.endswith(".gbff")]
+                if gbff_files:
+                    print(f"✅ [RECOVERY] Auto-activating genome: {entry}")
+                    file_detector.scan_directory(extracted_dir)
+                    genbank_file = file_detector.get_genbank_file()
+                    if genbank_file:
+                        return genbank_file.filepath
+
+    # Step 3: No genome found anywhere
+    print("❌ [RECOVERY] No GenBank file found in any genome directory.")
+    raise HTTPException(
+        status_code=404,
+        detail="No hay genomas disponibles. Por favor, descarga al menos un genoma desde el panel NCBI Datasets."
+    )
 
 
 # ==================== PROTEINS ====================
@@ -63,11 +78,42 @@ async def get_proteins(
 ):
     """
     Get proteins extracted from the active genome's GenBank file
+    Uses analysis cache first (much faster), then falls back to GenBank parsing.
     """
-    genbank_path = _get_genbank_path(request)
-    service = get_ncbi_service()
-
-    proteins = service.get_proteins_from_genbank(genbank_path, limit=5000)
+    proteins = []
+    
+    # Try getting from analysis cache first (FAST)
+    try:
+        from app.api.routes.analysis import _analysis_cache
+        genome_data = _analysis_cache.get("genome_data")
+        
+        if genome_data and genome_data.genes:
+            print(f"✅ [PROTEINS] Using analysis cache with {len(genome_data.genes)} genes")
+            proteins = [
+                {
+                    "protein_id": gene.protein_id,
+                    "locus_tag": gene.locus_tag,
+                    "gene_name": gene.gene_name,
+                    "product": gene.product,
+                    "length": gene.length,
+                    "full_sequence": gene.translation,
+                    "start": gene.start,
+                    "end": gene.end,
+                    "strand": gene.strand,
+                    "gc_content": gene.gc_content
+                }
+                for gene in genome_data.genes
+                if gene.protein_id  # Only include genes with protein_id
+            ]
+    except Exception as e:
+        print(f"⚠️ [PROTEINS] Cache lookup failed: {e}")
+    
+    # Fallback: read from GenBank file (SLOW)
+    if not proteins:
+        print(f"⚠️ [PROTEINS] Cache empty, falling back to GenBank parsing")
+        genbank_path = _get_genbank_path(request)
+        service = get_ncbi_service()
+        proteins = service.get_proteins_from_genbank(genbank_path, limit=5000)
 
     # Apply search
     if search:
@@ -102,16 +148,73 @@ async def get_proteins(
 
 @router.get("/protein/{protein_id}")
 async def get_protein_detail(protein_id: str, request: Request):
-    """Get full detail of a specific protein including sequence"""
-    genbank_path = _get_genbank_path(request)
+    """Get full detail of a specific protein including sequence
+    Uses analysis cache first, then searches all available genomes as fallback.
+    """
+    # Try getting from analysis cache first (FAST)
+    try:
+        from app.api.routes.analysis import _analysis_cache
+        genome_data = _analysis_cache.get("genome_data")
+        
+        if genome_data and genome_data.genes:
+            for gene in genome_data.genes:
+                if gene.protein_id == protein_id or gene.locus_tag == protein_id:
+                    print(f"✅ [PROTEIN] Found {protein_id} in analysis cache")
+                    return {
+                        "protein_id": gene.protein_id,
+                        "locus_tag": gene.locus_tag,
+                        "gene_name": gene.gene_name,
+                        "product": gene.product,
+                        "length": gene.length,
+                        "full_sequence": gene.translation,
+                        "start": gene.start,
+                        "end": gene.end,
+                        "strand": gene.strand,
+                        "gc_content": gene.gc_content
+                    }
+    except Exception as e:
+        print(f"⚠️ [PROTEIN] Cache lookup failed: {e}")
+    
+    # Fallback 1: Try active genome GenBank (if available)
     service = get_ncbi_service()
+    try:
+        genbank_path = _get_genbank_path(request)
+        print(f"🔍 [PROTEIN] Searching in active genome: {genbank_path}")
+        proteins = service.get_proteins_from_genbank(genbank_path, limit=10000)
+        for p in proteins:
+            if p.get("protein_id") == protein_id or p.get("locus_tag") == protein_id:
+                print(f"✅ [PROTEIN] Found {protein_id} in active genome")
+                return p
+    except Exception as e:
+        print(f"⚠️ [PROTEIN] Active genome search failed: {e}")
+    
+    # Fallback 2: Search ALL genomes (comprehensive search)
+    print(f"🔍 [PROTEIN] Searching across all genomes...")
+    genomes_dir = Path("genomes")
+    if genomes_dir.exists():
+        for accession_dir in sorted(genomes_dir.iterdir(), 
+                                   key=lambda x: (not x.name.startswith("GCF_"), x.name)):
+            if not accession_dir.is_dir():
+                continue
+            # Find GenBank file
+            extracted_path = accession_dir / "extracted"
+            if not extracted_path.exists():
+                continue
+            genbank_files = list(extracted_path.rglob("*.gbff")) + list(extracted_path.rglob("*.gbk"))
+            if not genbank_files:
+                continue
+            
+            genbank_path = str(genbank_files[0])
+            try:
+                proteins = service.get_proteins_from_genbank(genbank_path, limit=10000)
+                for p in proteins:
+                    if p.get("protein_id") == protein_id or p.get("locus_tag") == protein_id:
+                        print(f"✅ [PROTEIN] Found {protein_id} in {accession_dir.name}")
+                        return p
+            except Exception as e:
+                continue
 
-    proteins = service.get_proteins_from_genbank(genbank_path, limit=10000)
-    for p in proteins:
-        if p.get("protein_id") == protein_id or p.get("locus_tag") == protein_id:
-            return p
-
-    raise HTTPException(status_code=404, detail=f"Proteína no encontrada: {protein_id}")
+    raise HTTPException(status_code=404, detail=f"Proteína no encontrada en ningún genoma: {protein_id}")
 
 
 @router.post("/protein/predict-structure/{protein_id}")
@@ -123,8 +226,8 @@ async def predict_protein_structure(protein_id: str, request: Request):
     3. RCSB PDB experimental structure search
     4. ESMFold API (de novo, only for small proteins < 400 aa)
     Returns PDB format file for Molstar visualization
+    Uses analysis cache first.
     """
-    genbank_path = _get_genbank_path(request)
     
     print(f"🔍 [PREDICT] Searching sequence for: {protein_id}")
     sequence = None
@@ -132,24 +235,42 @@ async def predict_protein_structure(protein_id: str, request: Request):
     product_name = ""
     gene_name = ""
     
+    # Try getting from analysis cache first
     try:
-        with open(genbank_path, "r") as handle:
-            for record in SeqIO.parse(handle, "genbank"):
-                for feature in record.features:
-                    if feature.type == "CDS":
-                        qual = feature.qualifiers
-                        if qual.get('protein_id', [''])[0] == protein_id or \
-                           qual.get('locus_tag', [''])[0] == protein_id:
-                            sequence = qual.get('translation', [''])[0]
-                            db_xrefs = qual.get('db_xref', [])
-                            product_name = qual.get('product', [''])[0]
-                            gene_name = qual.get('gene', [''])[0]
-                            break
-                if sequence:
+        from app.api.routes.analysis import _analysis_cache
+        genome_data = _analysis_cache.get("genome_data")
+        
+        if genome_data and genome_data.genes:
+            for gene in genome_data.genes:
+                if gene.protein_id == protein_id or gene.locus_tag == protein_id:
+                    sequence = gene.translation
+                    db_xrefs = gene.db_xrefs or []
+                    product_name = gene.product or ""
+                    gene_name = gene.gene_name or ""
+                    print(f"✅ [PREDICT] Found in analysis cache")
                     break
     except Exception as e:
-        print(f"❌ [PREDICT] Error reading GenBank: {e}")
-        raise HTTPException(status_code=500, detail=f"Error en lectura genómica: {str(e)}")
+        print(f"⚠️ [PREDICT] Cache lookup failed: {e}")
+    
+    # Fallback: search in GenBank file
+    if not sequence:
+        try:
+            genbank_path = _get_genbank_path(request)
+            with open(genbank_path, "r") as handle:
+                for record in SeqIO.parse(handle, "genbank"):
+                    for feature in record.features:
+                        if feature.type == "CDS":
+                            qual = feature.qualifiers
+                            if qual.get('protein_id', [''])[0] == protein_id or \
+                               qual.get('locus_tag', [''])[0] == protein_id:
+                                sequence = qual.get('translation', [''])[0]
+                                db_xrefs = qual.get('db_xref', [])
+                                product_name = qual.get('product', [''])[0]
+                                gene_name = qual.get('gene', [''])[0]
+                                print(f"✅ [PREDICT] Found in GenBank file")
+                                break
+        except Exception as e:
+            print(f"⚠️ [PREDICT] GenBank search failed: {e}")
 
     if not sequence:
         raise HTTPException(status_code=404, detail=f"Proteína {protein_id} no identificada.")
@@ -385,15 +506,44 @@ async def get_gene_at_position(position: int, request: Request):
 async def get_gene_detail(locus_tag: str, request: Request):
     """
     Get detailed information about a specific gene
+    Uses analysis cache first, then falls back to GenBank search.
     """
-    genbank_path = _get_genbank_path(request)
+    # Try getting from analysis cache first
+    try:
+        from app.api.routes.analysis import _analysis_cache
+        genome_data = _analysis_cache.get("genome_data")
+        
+        if genome_data and genome_data.genes:
+            for gene in genome_data.genes:
+                if gene.locus_tag == locus_tag:
+                    return {
+                        "locus_tag": gene.locus_tag,
+                        "gene_name": gene.gene_name,
+                        "protein_id": gene.protein_id,
+                        "product": gene.product,
+                        "start": gene.start,
+                        "end": gene.end,
+                        "length": gene.length,
+                        "strand": gene.strand,
+                        "gc_content": gene.gc_content,
+                        "start_codon": gene.start_codon,
+                        "stop_codon": gene.stop_codon
+                    }
+    except Exception as e:
+        print(f"⚠️ [GENE] Cache lookup failed: {e}")
+    
+    # Fallback: search in GenBank file
     service = get_ncbi_service()
+    try:
+        genbank_path = _get_genbank_path(request)
+        result = service.get_gene_detail(genbank_path, locus_tag)
+        if result is not None:
+            return result
+    except Exception:
+        pass
+    
+    raise HTTPException(status_code=404, detail=f"Gen no encontrado: {locus_tag}")
 
-    result = service.get_gene_detail(genbank_path, locus_tag)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"Gen no encontrado: {locus_tag}")
-
-    return result
 
 
 # ==================== SEQUENCE VIEWER ====================
@@ -536,15 +686,32 @@ async def get_central_dogma(locus_tag: str, request: Request):
     """
     Get central dogma data for a gene:
     DNA (5'→3' / 3'→5') → mRNA (transcription) → Protein (translation)
+    Uses analysis cache first, then falls back to GenBank search.
     """
-    genbank_path = _get_genbank_path(request)
     service = get_ncbi_service()
-
-    result = service.get_central_dogma_data(genbank_path, locus_tag)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"Gen CDS no encontrado: {locus_tag}")
-
-    return result
+    
+    # Try getting from analysis cache first (much faster)
+    try:
+        from app.api.routes.analysis import _analysis_cache
+        genome_data = _analysis_cache.get("genome_data")
+        
+        if genome_data and genome_data.genbank_filepath:
+            result = service.get_central_dogma_data(genome_data.genbank_filepath, locus_tag)
+            if result is not None:
+                return result
+    except Exception as e:
+        print(f"⚠️ [DOGMA] Cache lookup failed: {e}")
+    
+    # Fallback: try active genome
+    try:
+        genbank_path = _get_genbank_path(request)
+        result = service.get_central_dogma_data(genbank_path, locus_tag)
+        if result is not None:
+            return result
+    except Exception:
+        pass
+    
+    raise HTTPException(status_code=404, detail=f"Gen CDS no encontrado: {locus_tag}")
 
 
 # ==================== GC SLIDING WINDOW ====================

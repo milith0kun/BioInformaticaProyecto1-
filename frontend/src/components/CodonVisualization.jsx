@@ -46,7 +46,7 @@ export default function CodonVisualization({ codonData }) {
     return (
       <div className="flex flex-col items-center justify-center py-48">
         <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizando Dataset de Codones...</p>
+        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Dataset de Codones...</p>
       </div>
     )
   }
@@ -66,25 +66,25 @@ export default function CodonVisualization({ codonData }) {
       {/* Principal Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 leading-none">Extensión de Hebra</p>
+          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Extensión de Hebra</p>
           <p className="text-3xl font-black text-slate-900 tracking-tighter">{formatLargeNumber(codonData.genome_length)}</p>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1">pares de bases</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight mt-1">pares de bases</p>
         </div>
         <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
-          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3 leading-none">Iniciadores ATG</p>
-          <p className="text-3xl font-black text-blue-600 tracking-tighter">{formatLargeNumber(codonData.atg_count)}</p>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1">sitios de iniciación</p>
+          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 leading-none">Iniciadores ATG</p>
+          <p className="text-3xl font-black text-blue-700 tracking-tighter">{formatLargeNumber(codonData.atg_count)}</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight mt-1">sitios de iniciación</p>
         </div>
         <div className="bg-white rounded-3xl border-2 border-slate-100 p-8 shadow-sm group hover:border-blue-200 transition-all">
-          <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3 leading-none">Densidad ATG</p>
-          <p className="text-3xl font-black text-indigo-600 tracking-tighter">{codonData.atg_density || 0}</p>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1">codones por kb</p>
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 leading-none">Densidad ATG</p>
+          <p className="text-3xl font-black text-indigo-700 tracking-tighter">{codonData.atg_density || 0}</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight mt-1">codones por kb</p>
         </div>
         <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl shadow-blue-900/20 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000"></div>
-          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 leading-none">Codones de Parada</p>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
+          <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-3 leading-none">Codones de Parada</p>
           <p className="text-3xl font-black tracking-tighter text-white">{formatLargeNumber(totalStopCodons)}</p>
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight mt-1">Total TAA/TAG/TGA</p>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1">Total TAA/TAG/TGA</p>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export default function CodonVisualization({ codonData }) {
                 iconType="circle"
                 formatter={(value) => {
                   const d = codonData.stop_codons[value]
-                  return <span className="text-[10px] font-black text-slate-600 uppercase ml-2">{value}: {d?.percentage?.toFixed(1)}%</span>
+                  return <span className="text-[10px] font-black text-slate-700 uppercase ml-2">{value}: {d?.percentage?.toFixed(1)}%</span>
                 }}
               />
             </PieChart>
@@ -155,23 +155,23 @@ export default function CodonVisualization({ codonData }) {
                 <tr key={codon} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-10 py-6 font-mono text-sm font-black text-blue-600 tracking-[0.2em]">{codon}</td>
                   <td className="px-6 py-6">
-                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest px-3 py-1 bg-slate-100 rounded-lg">
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest px-3 py-1 bg-slate-100 rounded-lg">
                       {codon === 'TAA' ? 'Ocre' : codon === 'TAG' ? 'Ámbar' : 'Ópalo'}
                     </span>
                   </td>
                   <td className="px-6 py-6 text-right text-xs font-black text-slate-900">{d.count?.toLocaleString()}</td>
                   <td className="px-6 py-6 text-right">
                     <div className="flex flex-col items-end gap-1">
-                      <span className="text-xs font-black text-blue-600">{(d.percentage || 0).toFixed(2)}%</span>
+                      <span className="text-xs font-black text-blue-700">{(d.percentage || 0).toFixed(2)}%</span>
                       <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500" style={{ width: `${d.percentage}%` }}></div>
+                        <div className="h-full bg-blue-600" style={{ width: `${d.percentage}%` }}></div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-6 text-right font-mono text-xs font-bold text-slate-500">{(d.density_per_kb || 0).toFixed(3)}/kb</td>
+                  <td className="px-6 py-6 text-right font-mono text-xs font-bold text-slate-600">{(d.density_per_kb || 0).toFixed(3)}/kb</td>
                   <td className="px-10 py-6">
                     <div className="w-28 h-8 mx-auto grayscale group-hover:grayscale-0 transition-all opacity-40 group-hover:opacity-100">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height={100}>
                         <AreaChart data={(d.spatial_distribution?.count_per_window || [0,5,2,8,3,6]).map(v => ({v}))}>
                           <Area type="monotone" dataKey="v" stroke={COLORS[Object.keys(codonData.stop_codons).indexOf(codon)]} fill={COLORS[Object.keys(codonData.stop_codons).indexOf(codon)]} fillOpacity={0.2} strokeWidth={1.5} dot={false} />
                         </AreaChart>
@@ -191,22 +191,22 @@ export default function CodonVisualization({ codonData }) {
           <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-10">Análisis Comparativo: Iniciadores vs Anotación</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Total ATG Detectados</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 leading-none">Total ATG Detectados</p>
               <p className="text-3xl font-black text-slate-900 tracking-tighter">{codonData.gene_comparison.atg_found?.toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Genes Anotados (Ref)</p>
-              <p className="text-3xl font-black text-blue-600 tracking-tighter">{codonData.gene_comparison.annotated_genes?.toLocaleString()}</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 leading-none">Genes Anotados (Ref)</p>
+              <p className="text-3xl font-black text-blue-700 tracking-tighter">{codonData.gene_comparison.annotated_genes?.toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Diferencia Neta</p>
-              <p className={`text-3xl font-black tracking-tighter ${codonData.gene_comparison.difference > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 leading-none">Diferencia Neta</p>
+              <p className={`text-3xl font-black tracking-tighter ${codonData.gene_comparison.difference > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                 {codonData.gene_comparison.difference > 0 ? '+' : ''}{codonData.gene_comparison.difference?.toLocaleString()}
               </p>
             </div>
           </div>
           <div className="mt-8 p-8 bg-blue-50/50 border-2 border-blue-100 rounded-[2rem] flex gap-6 items-start">
-            <div className="text-2xl">💡</div>
+            <div className="text-2xl text-blue-600 font-black">!</div>
             <div className="space-y-2">
               <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Interpretación del Sesgo</h4>
               <p className="text-[11px] font-medium text-blue-900/70 leading-relaxed uppercase tracking-tight">
@@ -220,7 +220,7 @@ export default function CodonVisualization({ codonData }) {
       {/* Scientific Context Footer */}
       <div className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl shadow-blue-900/20 flex flex-col md:flex-row gap-10 items-center overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none text-9xl font-black italic">STOP</div>
-        <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-3xl shadow-lg relative z-10">🔬</div>
+        <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-3xl shadow-lg relative z-10 font-black italic">!</div>
         <p className="text-sm font-medium leading-relaxed italic text-slate-300 relative z-10 max-w-4xl">
           "En el genoma de E. coli MG1655, el codón <span className="text-white font-black">TAA (Ocre)</span> es el terminador predominante (~63%), reflejando una fuerte presión selectiva para una terminación eficiente. <span className="text-white font-black">TAG (Ámbar)</span> y <span className="text-white font-black">TGA (Ópalo)</span> se utilizan con menor frecuencia, a menudo en genes con niveles de expresión moderados o regulados."
         </p>

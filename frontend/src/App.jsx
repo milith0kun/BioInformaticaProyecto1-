@@ -40,6 +40,14 @@ function App() {
   // Vista activa para resultados (después del paso 3)
   const [activeView, setActiveView] = useState('dashboard')
 
+  // Efecto para hacer scroll al inicio cuando cambia la vista
+  useEffect(() => {
+    const mainArea = document.querySelector('main')
+    if (mainArea) {
+      mainArea.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [activeView])
+
   // Estado para sidebar móvil y preferencias
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
@@ -534,8 +542,7 @@ function App() {
                   onRefresh={loadDownloadedGenomes}
                 />
 
-                <div className="flex justify-end p-8 bg-white rounded-[3rem] border border-slate-100 shadow-xl relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-blue-600 translate-y-full group-hover:translate-y-0 transition-transform duration-700"></div>
+                <div className="flex justify-end pt-6">
                   <button
                     onClick={() => {
                       if (selectedGenomes.length === 0) {
@@ -545,11 +552,11 @@ function App() {
                       setCurrentStep(2)
                     }}
                     disabled={selectedGenomes.length === 0}
-                    className="relative flex items-center gap-4 text-slate-900 group-hover:text-white transition-colors font-black uppercase tracking-widest text-sm"
+                    className="flex items-center gap-4 px-8 py-3.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-blue-600 hover:-translate-y-1 shadow-xl active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    Siguiente Fase: {selectedGenomes.length} Genomas
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    <span>Siguiente Fase: {selectedGenomes.length} Genomas</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                     </svg>
                   </button>
                 </div>
@@ -568,7 +575,7 @@ function App() {
                   <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em]">Preparando entorno de cómputo</p>
                 </div>
 
-                <div className="bg-white rounded-[3rem] border border-slate-100 p-12 shadow-2xl space-y-10">
+                <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-12 shadow-2xl space-y-10">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {selectedGenomes.map((accession, i) => (
                       <div key={accession} className="flex items-center gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 transition-all hover:bg-white hover:shadow-xl group/item">
@@ -580,25 +587,27 @@ function App() {
                     ))}
                   </div>
 
-                  <button
-                    onClick={runAnalysis}
-                    disabled={isLoading}
-                    className="w-full py-6 bg-slate-900 text-white font-black uppercase tracking-[0.2em] rounded-[2rem] transition-all hover:bg-blue-600 hover:-translate-y-2 shadow-2xl shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-6 group"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-                        <span className="tracking-widest">Sincronizando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Iniciar Procesamiento Genómico</span>
-                        <svg className="w-6 h-6 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex justify-center pt-4">
+                    <button
+                      onClick={runAnalysis}
+                      disabled={isLoading}
+                      className="w-full max-w-md py-4.5 bg-slate-900 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all hover:bg-blue-600 hover:-translate-y-1 shadow-2xl shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-6 group"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="w-5 h-5 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                          <span className="text-[10px] tracking-widest">Sincronizando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px]">Iniciar Procesamiento Genómico</span>
+                          <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

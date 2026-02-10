@@ -1,42 +1,71 @@
 /**
- * ProteinViewer Component — Zen Laboratory Edition
- * High-performance protein browser with traditional pagination and refined aesthetics
+ * ProteinViewer Component — Clean Laboratory Edition
+ * High-performance protein browser with size filtering, advanced search and 3D visualization.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import api from '../services/api'
 import ProteinStructureViewer from './ProteinStructureViewer'
 
+const SIZE_FILTERS = [
+  { id: 'all', label: 'Todas', min: 0, max: 10000, color: 'text-slate-500' },
+  { id: 'micro', label: 'Micro', min: 0, max: 100, color: 'text-cyan-500' },
+  { id: 'small', label: 'Pequeñas', min: 101, max: 300, color: 'text-blue-500' },
+  { id: 'medium', label: 'Medias', min: 301, max: 600, color: 'text-indigo-500' },
+  { id: 'large', label: 'Grandes', min: 601, max: 10000, color: 'text-violet-600' },
+]
+
 export default function ProteinViewer() {
-    const [proteins, setProteins] = useState([])
+    const [allProteins, setAllProteins] = useState([])
     const [loading, setLoading] = useState(false)
-    const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
-    const [totalPages, setTotalPages] = useState(1)
     const [search, setSearch] = useState('')
     const [searchInput, setSearchInput] = useState('')
+    const [sizeFilter, setSizeFilter] = useState('all')
     const [selectedProteinIndex, setSelectedProteinIndex] = useState(null)
     const [detailLoading, setDetailLoading] = useState(false)
 
-    const pageSize = 24 // Optimized grid layout
+    const pageSize = 24
 
-    // Initial load and page/search changes
+    // Load ALL available proteins once (limited to 5000 by backend)
     useEffect(() => {
-        loadProteins(page)
-    }, [page, search])
+        loadData()
+    }, [])
 
-    const loadProteins = async (pageNum) => {
+    const loadData = async () => {
         setLoading(true)
         try {
-            const data = await api.getProteins(pageNum, pageSize, search)
-            setProteins(data.proteins || [])
-            setTotal(data.total || 0)
-            setTotalPages(data.total_pages || 1)
+            const data = await api.getProteins(1, 5000, '')
+            setAllProteins(data.proteins || [])
         } catch (e) {
             console.error('Error loading proteins:', e)
         } finally {
             setLoading(false)
         }
     }
+
+    // Advanced filtering logic
+    const filteredProteins = useMemo(() => {
+        const currentRange = SIZE_FILTERS.find(f => f.id === sizeFilter)
+        const term = search.toLowerCase().trim()
+
+        return allProteins.filter(p => {
+            const matchesSearch = term === '' || 
+                (p.product?.toLowerCase().includes(term)) ||
+                (p.gene_name?.toLowerCase().includes(term)) ||
+                (p.protein_id?.toLowerCase().includes(term)) ||
+                (p.locus_tag?.toLowerCase().includes(term))
+            
+            const matchesSize = p.length >= currentRange.min && p.length <= currentRange.max
+            
+            return matchesSearch && matchesSize
+        })
+    }, [allProteins, search, sizeFilter])
+
+    const totalPages = Math.max(1, Math.ceil(filteredProteins.length / pageSize))
+    const paginatedProteins = useMemo(() => {
+        const start = (page - 1) * pageSize
+        return filteredProteins.slice(start, start + pageSize)
+    }, [filteredProteins, page])
 
     const handleSearch = (e) => {
         e.preventDefault()
@@ -45,15 +74,18 @@ export default function ProteinViewer() {
         setSelectedProteinIndex(null)
     }
 
-    const selectProtein = async (index) => {
+    const selectProtein = async (globalIndex) => {
+        const protein = paginatedProteins[globalIndex]
+        if (!protein) return
+        
         setDetailLoading(true)
-        setSelectedProteinIndex(index)
+        setSelectedProteinIndex(globalIndex)
+        
         try {
-            const protein = proteins[index]
             const detail = await api.getProteinDetail(protein.protein_id || protein.locus_tag)
-            const updatedProteins = [...proteins]
-            updatedProteins[index] = detail
-            setProteins(updatedProteins)
+            setAllProteins(prev => prev.map(p => 
+                (p.protein_id === detail.protein_id || p.locus_tag === detail.locus_tag) ? detail : p
+            ))
         } catch (e) {
             console.error('Error loading protein detail:', e)
         } finally {
@@ -64,203 +96,180 @@ export default function ProteinViewer() {
     const navigateProtein = useCallback((direction) => {
         if (selectedProteinIndex === null) return
         const newIndex = direction === 'next'
-            ? Math.min(selectedProteinIndex + 1, proteins.length - 1)
+            ? Math.min(selectedProteinIndex + 1, paginatedProteins.length - 1)
             : Math.max(selectedProteinIndex - 1, 0)
+        
         if (newIndex !== selectedProteinIndex) {
             selectProtein(newIndex)
         }
-    }, [selectedProteinIndex, proteins.length])
+    }, [selectedProteinIndex, paginatedProteins])
 
-    const getSizeCategory = (length) => {
-        if (length < 100) return { label: 'Micro', color: 'from-cyan-500 to-blue-500', ring: 'ring-cyan-500/20' }
-        if (length < 300) return { label: 'Pequeña', color: 'from-blue-500 to-indigo-500', ring: 'ring-blue-500/20' }
-        if (length < 600) return { label: 'Media', color: 'from-indigo-500 to-violet-500', ring: 'ring-indigo-500/20' }
-        return { label: 'Grande', color: 'from-violet-500 to-fuchsia-600', ring: 'ring-violet-500/20' }
-    }
-
-    const selectedProtein = selectedProteinIndex !== null ? proteins[selectedProteinIndex] : null
+    // FIX: Using correct variable name 'selectedProteinIndex'
+    const currentSelectedProtein = selectedProteinIndex !== null ? paginatedProteins[selectedProteinIndex] : null
 
     return (
-        <div className="min-h-screen bg-[#f1f5f9]">
-            <div className="max-w-7xl mx-auto p-8 lg:p-12 space-y-12">
+        <div className="space-y-10 animate-in fade-in duration-1000">
+            
+            {/* 1. Dashboard Header & Search */}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-8 bg-white p-10 rounded-[3rem] border-2 border-slate-100 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] -mr-32 -mt-32"></div>
                 
-                {/* Dashboard Header */}
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 bg-white p-10 rounded-[3rem] border border-slate-200 backdrop-blur-2xl shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] -mr-32 -mt-32"></div>
-                    
-                    <div className="space-y-4 relative z-10">
-                        <h2 className="text-4xl lg:text-6xl font-black tracking-tighter text-slate-900 uppercase italic">
-                            PROTEOMA <span className="text-blue-600">LAB</span>
-                        </h2>
-                        <div className="flex items-center gap-4">
-                            <div className="px-4 py-1.5 bg-blue-50 rounded-full border border-blue-100">
-                                <p className="text-blue-600 text-[10px] font-black uppercase tracking-[0.2em]">
-                                    {total.toLocaleString()} SECUENCIAS
-                                </p>
-                            </div>
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sincronizado</span>
+                <div className="space-y-4 relative z-10">
+                    <h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase italic leading-none">
+                        Proteoma <span className="text-blue-600">Lab</span>
+                    </h2>
+                    <div className="flex items-center gap-4">
+                        <div className="px-4 py-1.5 bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest rounded-full border border-blue-100 shadow-sm">
+                            {allProteins.length.toLocaleString()} Secuencias Detectadas
                         </div>
+                        {search && (
+                            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                                Filtrando: <span className="text-blue-600">{filteredProteins.length}</span> resultados
+                            </span>
+                        )}
                     </div>
-
-                    {/* Search Engine */}
-                    <form onSubmit={handleSearch} className="w-full lg:w-auto relative z-10">
-                        <div className="relative group">
-                            <input
-                                type="text"
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                placeholder="Filtrar por Gen o ID..."
-                                className="w-full lg:w-[450px] pl-16 pr-6 py-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 transition-all shadow-inner font-medium"
-                            />
-                            <svg className="w-6 h-6 text-slate-400 absolute left-6 top-1/2 -translate-y-1/2 group-focus-within:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 px-8 py-2.5 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl transition-all active:scale-95">
-                                BUSCAR
-                            </button>
-                        </div>
-                    </form>
                 </div>
 
-                {/* Content Grid */}
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-48">
-                        <div className="w-24 h-24 relative mb-8">
-                            <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
-                            <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-                        </div>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse text-center">Indexando Base de Datos...</p>
+                <form onSubmit={handleSearch} className="relative z-10 w-full lg:w-[500px]">
+                    <div className="relative group">
+                        <input
+                            type="text"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Buscar por Producto, Gen o ID..."
+                            className="w-full pl-12 pr-32 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 text-[10px] font-black uppercase tracking-widest focus:border-blue-500/50 transition-all placeholder-slate-400 shadow-inner"
+                        />
+                        <svg className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95">
+                            Buscar
+                        </button>
                     </div>
-                ) : (
-                    <div className="space-y-16">
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-                            {proteins.map((protein, index) => {
-                                const size = getSizeCategory(protein.length)
-                                const isSelected = selectedProteinIndex === index
-
-                                return (
-                                    <button
-                                        key={`${protein.protein_id}-${index}`}
-                                        onClick={() => selectProtein(index)}
-                                        className={`group relative text-left bg-white rounded-[2.5rem] border-2 transition-all duration-700 overflow-hidden hover:-translate-y-3 ${
-                                            isSelected
-                                                ? `border-blue-500 bg-blue-50/30 shadow-2xl shadow-blue-500/10 ring-8 ring-blue-500/5`
-                                                : 'border-white shadow-md hover:shadow-xl hover:border-slate-100'
-                                        }`}
-                                    >
-                                        <div className="p-8 space-y-5 relative z-10">
-                                            {/* Header */}
-                                            <div className="flex items-start justify-between">
-                                                <div className="min-w-0 flex-1">
-                                                    <h4 className="font-mono text-xl font-black text-slate-900 truncate group-hover:text-blue-600 transition-colors tracking-tighter uppercase">
-                                                        {protein.protein_id || protein.locus_tag}
-                                                    </h4>
-                                                    <div className="flex flex-wrap gap-2 mt-3">
-                                                        {protein.gene_name && (
-                                                            <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-lg border border-blue-100">
-                                                                {protein.gene_name}
-                                                            </span>
-                                                        )}
-                                                        <span className={`px-2.5 py-1 bg-gradient-to-r ${size.color} text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg`}>
-                                                            {size.label}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Description */}
-                                            <p className="text-[11px] text-slate-500 font-medium line-clamp-2 leading-relaxed min-h-[2.5rem]">
-                                                {protein.product || 'Proteína funcional hipotética'}
-                                            </p>
-
-                                            {/* Geometric Progress */}
-                                            <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                                                <div 
-                                                    className={`h-full bg-gradient-to-r ${size.color} transition-all duration-1000 group-hover:w-full shadow-[0_0_8px_rgba(59,130,246,0.2)]`}
-                                                    style={{ width: `${Math.min((protein.length / 1000) * 100, 100)}%` }}
-                                                />
-                                            </div>
-
-                                            {/* Analytics Footer */}
-                                            <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                                                <div className="space-y-1">
-                                                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Residuos</p>
-                                                    <p className="font-mono text-sm text-slate-900 font-black">{protein.length}</p>
-                                                </div>
-                                                <div className="space-y-1 text-right">
-                                                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Masa</p>
-                                                    <p className="font-mono text-sm text-slate-900 font-black">{((protein.molecular_weight_approx || 0) / 1000).toFixed(1)} <span className="text-[10px] text-slate-400">kDa</span></p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                        </div>
-
-                        {/* Traditional Pagination */}
-                        <div className="flex flex-col md:flex-row items-center justify-center gap-8 py-12 border-t border-slate-200">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    className="p-4 bg-white hover:bg-slate-50 rounded-2xl border border-slate-200 disabled:opacity-20 transition-all group shadow-sm"
-                                >
-                                    <svg className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
-                                </button>
-                                
-                                <div className="flex gap-2">
-                                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                                        let pageNum = 1
-                                        if (totalPages <= 5) pageNum = i + 1
-                                        else if (page <= 3) pageNum = i + 1
-                                        else if (page >= totalPages - 2) pageNum = totalPages - 4 + i
-                                        else pageNum = page - 2 + i
-
-                                        if (pageNum <= 0 || pageNum > totalPages) return null
-
-                                        return (
-                                            <button
-                                                key={pageNum}
-                                                onClick={() => setPage(pageNum)}
-                                                className={`w-12 h-12 rounded-2xl font-black text-xs transition-all border ${
-                                                    page === pageNum
-                                                        ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-900/20 scale-110'
-                                                        : 'bg-white border-slate-200 text-slate-500 hover:text-blue-600 hover:bg-slate-50 shadow-sm'
-                                                }`}
-                                            >
-                                                {pageNum}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-
-                                <button
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                    className="p-4 bg-white hover:bg-slate-50 rounded-2xl border border-slate-200 disabled:opacity-20 transition-all group shadow-sm"
-                                >
-                                    <svg className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
-                                </button>
-                            </div>
-                            
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                                PÁGINA {page} DE {totalPages}
-                            </p>
-                        </div>
-                    </div>
-                )}
+                </form>
             </div>
 
-            {/* Protein Detail Modal */}
-            {selectedProtein && (
+            {/* 2. Size Filters Tabs (Centered) */}
+            <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-2 flex flex-wrap justify-center gap-3 shadow-sm">
+                {SIZE_FILTERS.map(f => (
+                    <button
+                        key={f.id}
+                        onClick={() => { setSizeFilter(f.id); setPage(1); }}
+                        className={`flex items-center gap-3 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            sizeFilter === f.id 
+                                ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                    >
+                        <span>{f.label}</span>
+                        <span className={`ml-2 px-2 py-0.5 rounded-lg text-[8px] ${sizeFilter === f.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            {allProteins.filter(p => p.length >= f.min && p.length <= f.max).length}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            {/* 3. Content Grid */}
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-48">
+                    <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-inner"></div>
+                    <p className="text-slate-600 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse text-center">Indexando Proteoma...</p>
+                </div>
+            ) : filteredProteins.length === 0 ? (
+                <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-20 text-center space-y-6">
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Sin Resultados</h3>
+                    <p className="text-slate-600 text-xs font-bold uppercase max-w-sm mx-auto leading-relaxed">No se encontraron proteínas que coincidan con los criterios de búsqueda y tamaño seleccionados.</p>
+                    <button onClick={() => { setSearch(''); setSearchInput(''); setSizeFilter('all'); }} className="px-8 py-3 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all shadow-sm">Limpiar Filtros</button>
+                </div>
+            ) : (
+                <div className="space-y-12">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        {paginatedProteins.map((protein, index) => (
+                            <button
+                                key={`${protein.protein_id}-${index}`}
+                                onClick={() => selectProtein(index)}
+                                className="group relative text-left bg-white rounded-[2.5rem] border-2 border-slate-100 hover:border-blue-200 transition-all duration-500 overflow-hidden hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-900/5 active:scale-[0.98]"
+                            >
+                                <div className="p-8 space-y-5 relative z-10">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0 flex-1">
+                                            <h4 className="font-mono text-lg font-black text-slate-900 truncate group-hover:text-blue-600 transition-colors tracking-tighter uppercase leading-none">
+                                                {protein.gene_name || protein.locus_tag}
+                                            </h4>
+                                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-2">{protein.protein_id}</p>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-[11px] text-slate-600 font-bold uppercase line-clamp-2 leading-relaxed min-h-[2.5rem]">
+                                        {protein.product || 'Proteína funcional hipotética'}
+                                    </p>
+
+                                    <div className="w-full h-1 bg-slate-50 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full bg-blue-600 transition-all duration-1000 shadow-[0_0_8px_rgba(37,99,235,0.3)]`}
+                                            style={{ width: `${Math.min((protein.length / 1000) * 100, 100)}%` }}
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                                        <div className="space-y-1">
+                                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Residuos</p>
+                                            <p className="font-mono text-xs text-slate-900 font-black">{protein.length} aa</p>
+                                        </div>
+                                        <div className="space-y-1 text-right">
+                                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Masa</p>
+                                            <p className="font-mono text-xs text-slate-900 font-black">{((protein.molecular_weight_approx || 0) / 1000).toFixed(1)} <span className="text-[10px] text-slate-400 uppercase font-bold">kDa</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-8 py-10 px-10 bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-100 disabled:opacity-20 transition-all group active:scale-95 shadow-sm"
+                            >
+                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3}/></svg>
+                            </button>
+                            
+                            <div className="px-8 py-3 bg-white rounded-2xl border-2 border-slate-100 text-[10px] font-black uppercase tracking-widest shadow-inner text-slate-900">
+                                Página <span className="text-blue-700">{page}</span> de {totalPages}
+                            </div>
+
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-100 disabled:opacity-20 transition-all group active:scale-95 shadow-sm"
+                            >
+                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3}/></svg>
+                            </button>
+                        </div>
+                        
+                        <div className="flex gap-10">
+                            <div className="text-center">
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Mostrando</p>
+                                <p className="text-xl font-black text-slate-900">{paginatedProteins.length}</p>
+                            </div>
+                            <div className="text-center border-l border-slate-100 pl-10">
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Filtrado</p>
+                                <p className="text-xl font-black text-blue-600">{filteredProteins.length}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {currentSelectedProtein && (
                 <ProteinStructureViewer
-                    protein={selectedProtein}
+                    protein={currentSelectedProtein}
                     onClose={() => setSelectedProteinIndex(null)}
                     onNavigate={navigateProtein}
                     currentIndex={selectedProteinIndex}
-                    totalProteins={proteins.length}
+                    totalProteins={paginatedProteins.length}
                     loading={detailLoading}
                 />
             )}

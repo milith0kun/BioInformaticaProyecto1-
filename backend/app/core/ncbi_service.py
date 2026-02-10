@@ -1028,15 +1028,39 @@ class NCBIService:
             response = requests.post(url, data=params, timeout=30)
             response.raise_for_status()
 
-            # Extract RID
+            # Extract RID from NCBI response
             text = response.text
             rid = ""
-            for line in text.split('\n'):
-                if 'RID' in line and '=' in line:
-                    parts = line.split('=')
-                    if len(parts) >= 2:
-                        rid = parts[-1].strip()
-                        break
+            
+            # Method 1: Look for "RID = XXXXX" pattern in the QBlastInfo block
+            # NCBI format is typically: <!-- QBlastInfoBegin RID = RID_VALUE ... -->
+            rid_match = re.search(r'RID\s*=\s*([A-Z0-9_-]+)', text, re.IGNORECASE)
+            if rid_match:
+                candidate = rid_match.group(1).strip()
+                # RID is typically uppercase alphanumeric, sometimes with dashes
+                if 8 <= len(candidate) <= 25 and candidate.replace("-", "").replace("_", "").isalnum():
+                    rid = candidate
+            
+            # Method 2: Fallback to line-by-line search if regex was too loose
+            if not rid:
+                for line in text.split('\n'):
+                    if 'RID' in line.upper() and '=' in line:
+                        # Strip HTML and extract value
+                        clean_line = re.sub(r'<[^>]+>', '', line)
+                        if '=' in clean_line:
+                            parts = clean_line.split('=')
+                            candidate = parts[-1].strip()
+                            if 8 <= len(candidate) <= 25 and candidate.replace("-", "").replace("_", "").isalnum():
+                                rid = candidate
+                                break
+            
+            # Final validation: RID must NOT contain HTML and must match NCBI pattern
+            if not rid or '<' in rid or '>' in rid or '"' in rid:
+                print(f"⚠️ [BLAST] Error parsing RID. Response sample: {text[:300]}")
+                return {
+                    "error": "No se pudo obtener un ID de rastreo (RID) válido de NCBI. Es posible que el servicio esté saturado o la secuencia sea inválida.",
+                    "status": "ERROR"
+                }
 
             return {
                 "rid": rid,
