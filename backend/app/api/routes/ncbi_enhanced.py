@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from typing import Optional, List
 import os
 import httpx
+from pathlib import Path
 from Bio import SeqIO
 
 from app.core.ncbi_service import get_ncbi_service
@@ -252,10 +253,11 @@ async def predict_protein_structure(protein_id: str, request: Request):
     except Exception as e:
         print(f"⚠️ [PREDICT] Cache lookup failed: {e}")
     
-    # Fallback: search in GenBank file
+    # Fallback 1: Try active genome GenBank
     if not sequence:
         try:
             genbank_path = _get_genbank_path(request)
+            print(f"🔍 [PREDICT] Searching in active genome: {genbank_path}")
             with open(genbank_path, "r") as handle:
                 for record in SeqIO.parse(handle, "genbank"):
                     for feature in record.features:
@@ -267,10 +269,50 @@ async def predict_protein_structure(protein_id: str, request: Request):
                                 db_xrefs = qual.get('db_xref', [])
                                 product_name = qual.get('product', [''])[0]
                                 gene_name = qual.get('gene', [''])[0]
-                                print(f"✅ [PREDICT] Found in GenBank file")
+                                print(f"✅ [PREDICT] Found in active genome")
                                 break
+                    if sequence:
+                        break
         except Exception as e:
-            print(f"⚠️ [PREDICT] GenBank search failed: {e}")
+            print(f"⚠️ [PREDICT] Active genome search failed: {e}")
+    
+    # Fallback 2: Search ALL genomes (comprehensive search)
+    if not sequence:
+        print(f"🔍 [PREDICT] Searching across all genomes...")
+        genomes_dir = Path("genomes")
+        if genomes_dir.exists():
+            for accession_dir in sorted(genomes_dir.iterdir(), 
+                                       key=lambda x: (not x.name.startswith("GCF_"), x.name)):
+                if not accession_dir.is_dir():
+                    continue
+                extracted_path = accession_dir / "extracted"
+                if not extracted_path.exists():
+                    continue
+                genbank_files = list(extracted_path.rglob("*.gbff")) + list(extracted_path.rglob("*.gbk"))
+                if not genbank_files:
+                    continue
+                
+                genbank_path = str(genbank_files[0])
+                try:
+                    with open(genbank_path, "r") as handle:
+                        for record in SeqIO.parse(handle, "genbank"):
+                            for feature in record.features:
+                                if feature.type == "CDS":
+                                    qual = feature.qualifiers
+                                    if qual.get('protein_id', [''])[0] == protein_id or \
+                                       qual.get('locus_tag', [''])[0] == protein_id:
+                                        sequence = qual.get('translation', [''])[0]
+                                        db_xrefs = qual.get('db_xref', [])
+                                        product_name = qual.get('product', [''])[0]
+                                        gene_name = qual.get('gene', [''])[0]
+                                        print(f"✅ [PREDICT] Found {protein_id} in {accession_dir.name}")
+                                        break
+                            if sequence:
+                                break
+                    if sequence:
+                        break
+                except Exception as e:
+                    continue
 
     if not sequence:
         raise HTTPException(status_code=404, detail=f"Proteína {protein_id} no identificada.")
@@ -757,7 +799,14 @@ async def submit_blast(request: Request):
     result = service.submit_blast_search(sequence, program, database, max_hits)
 
     if result.get("status") == "ERROR":
-        raise HTTPException(status_code=500, detail=result.get("error", "Error BLAST"))
+        error_msg = result.get("error", "Error BLAST")
+        # If error contains HTML keywords, NCBI service is likely down/overloaded
+        if any(keyword in error_msg.lower() for keyword in ["html", "doctype", "<!doctype", "no se pudo obtener un id"]):
+            raise HTTPException(
+                status_code=503, 
+                detail="El servicio BLAST de NCBI está temporalmente no disponible o saturado. Por favor, inténtalo de nuevo en unos minutos."
+            )
+        raise HTTPException(status_code=500, detail=error_msg)
 
     return result
 

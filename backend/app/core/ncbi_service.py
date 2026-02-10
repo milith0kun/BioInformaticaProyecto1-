@@ -1075,7 +1075,7 @@ class NCBIService:
 
     def get_blast_results(self, rid: str):
         """
-        Check BLAST results for a given RID.
+        Check BLAST results for a given RID with improved status detection.
         """
         try:
             url = f"https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi"
@@ -1088,12 +1088,64 @@ class NCBIService:
             response.raise_for_status()
 
             text = response.text
+            print(f"🔍 [BLAST] Status check for {rid}, response length: {len(text)} bytes")
 
-            # Check if still running
-            if "WAITING" in text:
+            # Debug: Log first 500 chars to understand response format
+            if len(text) < 200:
+                print(f"📄 [BLAST] Full response: {text}")
+            else:
+                print(f"📄 [BLAST] Response preview: {text[:300]}...")
+            
+            # NCBI sometimes returns ZIP files with JSON inside (starts with "PK")
+            # This indicates results are ready but we can't parse them easily
+            is_zip = text.startswith("PK") or text.startswith("\x50\x4b")
+            if is_zip:
+                print(f"✅ [BLAST] Job {rid} completed (ZIP format received)")
+                return {
+                    "status": "READY",
+                    "rid": rid,
+                    "total_hits": 0,
+                    "hits": [],
+                    "blast_url": f"https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=HTML",
+                    "note": "Resultados disponibles en formato comprimido. Ver enlace web."
+                }
+
+            # Check multiple status indicators from NCBI
+            status_upper = text.upper()
+            
+            # Status 1: WAITING (job still running)
+            if "STATUS=WAITING" in status_upper or "WAITING" in status_upper[:500]:
+                print(f"⏳ [BLAST] Job {rid} still running...")
                 return {"status": "WAITING", "rid": rid}
-            if "READY" not in text and "BlastOutput2" not in text:
+            
+            # Status 2: UNKNOWN (job expired or invalid)
+            if "STATUS=UNKNOWN" in status_upper or "UNKNOWN" in status_upper[:500]:
+                print(f"⚠️ [BLAST] Job {rid} expired or not found")
+                return {
+                    "status": "ERROR",
+                    "error": "Búsqueda BLAST expirada o no encontrada. Intenta de nuevo.",
+                    "rid": rid
+                }
+            
+            # Status 3: FAILED
+            if "STATUS=FAILED" in status_upper or "FAILED" in status_upper[:500]:
+                print(f"❌ [BLAST] Job {rid} failed")
+                return {
+                    "status": "ERROR",
+                    "error": "La búsqueda BLAST falló en el servidor de NCBI",
+                    "rid": rid
+                }
+
+            # Status 4: READY or has JSON results (job complete)
+            has_json_results = "BlastOutput2" in text or '"BlastOutput2"' in text
+            is_ready = "STATUS=READY" in status_upper or "READY" in status_upper[:500]
+            
+            if not has_json_results and not is_ready:
+                # Ambiguous response, assume still waiting
+                print(f"⏳ [BLAST] Job {rid} status unclear, assuming WAITING")
                 return {"status": "WAITING", "rid": rid}
+
+            print(f"✅ [BLAST] Job {rid} completed, parsing results...")
 
             # Try to parse JSON results
             try:
@@ -1120,24 +1172,27 @@ class NCBIService:
                                 "query_to": best_hsp.get("query_to", 0),
                                 "url": f"https://www.ncbi.nlm.nih.gov/nucleotide/{desc.get('accession', '')}"
                             })
+                print(f"📊 [BLAST] Parsed {len(results)} hits for {rid}")
                 return {
-                    "status": "COMPLETE",
+                    "status": "READY",  # Frontend expects "READY" not "COMPLETE"
                     "rid": rid,
                     "total_hits": len(results),
                     "hits": results,
                     "blast_url": f"https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=HTML"
                 }
-            except:
+            except json.JSONDecodeError as je:
+                print(f"⚠️ [BLAST] JSON parse error for {rid}: {je}")
+                # If JSON parsing fails but response looks ready, return web link
                 return {
-                    "status": "COMPLETE",
+                    "status": "READY",  # Frontend expects "READY"
                     "rid": rid,
                     "total_hits": 0,
                     "hits": [],
                     "blast_url": f"https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=HTML",
-                    "note": "Results are available at the BLAST URL"
+                    "note": "Los resultados están disponibles en el enlace BLAST web"
                 }
         except Exception as e:
-            print(f"Error getting BLAST results: {e}")
+            print(f"❌ [BLAST] Exception getting results for {rid}: {e}")
             return {"status": "ERROR", "error": str(e), "rid": rid}
 
     def get_trna_rrna_analysis(self, genbank_path: str):
