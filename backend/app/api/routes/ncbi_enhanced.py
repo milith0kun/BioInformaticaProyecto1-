@@ -7,10 +7,13 @@ Provides endpoints for:
 - Complete codon usage (RSCU, CAI, Nc)
 - Genome circular map data
 - Literature references search
+- Protein structure prediction with ESMFold
 """
 from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi.responses import Response
 from typing import Optional, List
 import os
+import httpx
 
 from app.core.ncbi_service import get_ncbi_service
 
@@ -96,6 +99,80 @@ async def get_protein_detail(protein_id: str, request: Request):
             return p
 
     raise HTTPException(status_code=404, detail=f"Proteína no encontrada: {protein_id}")
+
+
+@router.post("/protein/predict-structure/{protein_id}")
+async def predict_protein_structure(protein_id: str, request: Request):
+    """
+    Predict 3D structure using ESMFold API from protein sequence
+    Returns PDB format file that can be visualized in Molstar
+    """
+    genbank_path = _get_genbank_path(request)
+    service = get_ncbi_service()
+
+    # Get protein with full sequence
+    proteins = service.get_proteins_from_genbank(genbank_path, limit=10000)
+    protein = None
+    for p in proteins:
+        if p.get("protein_id") == protein_id or p.get("locus_tag") == protein_id:
+            protein = p
+            break
+
+    if not protein:
+        raise HTTPException(status_code=404, detail=f"Proteína no encontrada: {protein_id}")
+
+    sequence = protein.get("full_sequence", "")
+    if not sequence:
+        raise HTTPException(status_code=400, detail="La proteína no tiene secuencia disponible")
+
+    # Validate sequence length (ESMFold has limits)
+    if len(sequence) > 400:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Secuencia demasiado larga ({len(sequence)} aa). ESMFold soporta máximo 400 aminoácidos."
+        )
+
+    if len(sequence) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Secuencia demasiado corta ({len(sequence)} aa). Mínimo 10 aminoácidos requeridos."
+        )
+
+    try:
+        # Call ESMFold API
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.esmatlas.com/foldSequence/v1/pdb/",
+                data=sequence,
+                headers={"Content-Type": "text/plain"}
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"ESMFold API error: {response.text}"
+                )
+
+            # Return PDB file directly
+            pdb_content = response.text
+            return Response(
+                content=pdb_content,
+                media_type="chemical/x-pdb",
+                headers={
+                    "Content-Disposition": f"inline; filename={protein_id}_predicted.pdb"
+                }
+            )
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="Timeout esperando respuesta de ESMFold. Intenta con una proteína más pequeña."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error prediciendo estructura: {str(e)}"
+        )
 
 
 # ==================== GENE LOCATION ====================
