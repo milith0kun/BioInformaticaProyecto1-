@@ -125,11 +125,11 @@ async def predict_protein_structure(protein_id: str, request: Request):
     if not sequence:
         raise HTTPException(status_code=400, detail="La proteína no tiene secuencia disponible")
 
-    # Validate sequence length (ESMFold has limits)
-    if len(sequence) > 400:
+    # Validate sequence length (ESMFold has limits, but we increase it as requested)
+    if len(sequence) > 1000:
         raise HTTPException(
             status_code=400,
-            detail=f"Secuencia demasiado larga ({len(sequence)} aa). ESMFold soporta máximo 400 aminoácidos."
+            detail=f"Secuencia demasiado larga ({len(sequence)} aa). ESMFold soporta un máximo extendido de 1000 aminoácidos en esta plataforma."
         )
 
     if len(sequence) < 10:
@@ -139,8 +139,8 @@ async def predict_protein_structure(protein_id: str, request: Request):
         )
 
     try:
-        # Call ESMFold API
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Call ESMFold API with extended timeout
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 "https://api.esmatlas.com/foldSequence/v1/pdb/",
                 data=sequence,
