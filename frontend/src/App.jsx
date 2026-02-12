@@ -49,6 +49,7 @@ function App() {
 
   // Estado para sidebar móvil y preferencias
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [miniSidebar, setMiniSidebar] = useState(false) // Estado para sidebar minimizado
   const [sidebarSearch, setSidebarSearch] = useState('')
 
   // Cargar preferencias de sidebar desde localStorage
@@ -69,9 +70,9 @@ function App() {
   // Guardar preferencias cuando cambia el estado del sidebar
   useEffect(() => {
     if (window.innerWidth >= 1024) {
-      localStorage.setItem('sidebarPreferences', JSON.stringify({ defaultOpen: sidebarOpen }))
+      localStorage.setItem('sidebarPreferences', JSON.stringify({ defaultOpen: sidebarOpen, mini: miniSidebar }))
     }
-  }, [sidebarOpen])
+  }, [sidebarOpen, miniSidebar])
 
   useEffect(() => {
     loadFiles()
@@ -266,6 +267,30 @@ function App() {
     { id: 3, name: 'Resultados', description: 'Ver análisis' },
   ]
 
+  // Iconos para la navegación (SVG paths)
+  const icons = {
+    dashboard: "M4 5a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1h-6a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 14a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1h-6a1 1 0 01-1-1v-6z",
+    comparison: "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4",
+    'genome-map': "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
+    codons: "M3 10h18M3 14h18m-9-4v8m-7-4h14M7 6h10",
+    'codon-usage': "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    genes: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2",
+    proteins: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+    rna: "M13 10V3L4 14h7v7l9-11h-7z", // Using generic thunder here as placeholder
+    dogma: "M13 5l7 7-7 7M5 5l7 7-7 7",
+    'gc-window': "M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z",
+    blast: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+    'concept-map': "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z",
+    'network-map': "M13 10V3L4 14h7v7l9-11h-7z", // Flash
+    phylo: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
+    cog: "M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z",
+    cai: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z",
+    chat: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
+    ai: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z",
+    files: "M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5z",
+    export: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+  }
+
   // Organización mejorada de vistas por categorías
   const navigationSections = [
     {
@@ -330,36 +355,41 @@ function App() {
       <Toaster position="top-right" />
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 transform transition-transform duration-500 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col h-screen shadow-2xl lg:shadow-none`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 bg-white border-r border-slate-200 transform transition-all duration-500 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col h-screen shadow-2xl lg:shadow-none ${miniSidebar ? 'w-24' : 'w-80'}`}>
 
         {/* Sidebar Header */}
-        <div className="p-8 border-b border-slate-100 bg-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition-transform hover:rotate-12">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Genómica <span className="text-blue-600">Lab</span></h1>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análisis Molecular</p>
-              </div>
+        <div className={`p-6 border-b border-slate-100 bg-white flex items-center ${miniSidebar ? 'justify-center' : 'justify-between'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition-transform hover:rotate-12 flex-shrink-0 cursor-pointer`} onClick={() => setMiniSidebar(!miniSidebar)}>
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
             </div>
+            {!miniSidebar && (
+              <div className="min-w-0 animate-in fade-in duration-300">
+                <h1 className="text-sm font-black text-slate-900 uppercase tracking-tighter truncate">Genómica <span className="text-blue-600">Lab</span></h1>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Análisis Molecular</p>
+              </div>
+            )}
+          </div>
+          {!miniSidebar && (
             <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 transition-colors"
+              onClick={() => {
+                if (window.innerWidth < 1024) setSidebarOpen(false)
+                else setMiniSidebar(true)
+              }}
+              className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
             >
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={window.innerWidth < 1024 ? "M6 18L18 6M6 6l12 12" : "M11 19l-7-7 7-7m8 14l-7-7 7-7"} />
               </svg>
             </button>
-          </div>
+          )}
         </div>
 
         {/* Workflow Progress */}
-        {currentStep < 3 && (
-          <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex-shrink-0">
+        {currentStep < 3 && !miniSidebar && (
+          <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex-shrink-0 animate-in fade-in">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">PROGRESO DEL FLUJO</div>
             <div className="space-y-3">
               {steps.map((step) => (
@@ -403,22 +433,32 @@ function App() {
         {/* Navigation Sections */}
         {currentStep === 3 && (
           <>
-            <div className="p-6 border-b border-slate-50 flex-shrink-0">
+            <div className={`p-6 border-b border-slate-50 flex-shrink-0 transition-all ${miniSidebar ? 'px-4' : 'px-6'}`}>
               <div className="relative group">
-                <input
-                  type="text"
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                  placeholder="Filtrar herramientas..."
-                  className="w-full pl-10 pr-4 py-3 text-xs font-bold border border-slate-100 bg-slate-50 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500/30 transition-all placeholder-slate-400"
-                />
-                <svg className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                {!miniSidebar ? (
+                  <>
+                    <input
+                      type="text"
+                      value={sidebarSearch}
+                      onChange={(e) => setSidebarSearch(e.target.value)}
+                      placeholder="Filtrar..."
+                      className="w-full pl-10 pr-4 py-3 text-xs font-bold border border-slate-100 bg-slate-50 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500/30 transition-all placeholder-slate-400"
+                    />
+                    <svg className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </>
+                ) : (
+                  <button onClick={() => setMiniSidebar(false)} className="w-full flex justify-center py-2 bg-slate-50 rounded-xl hover:bg-slate-100">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
-            <nav className="flex-1 overflow-y-auto p-6 sidebar-scroll min-h-0 space-y-8">
+            <nav className={`flex-1 overflow-y-auto ${miniSidebar ? 'px-2' : 'px-6'} py-6 sidebar-scroll min-h-0 space-y-8`}>
               {navigationSections.map((section, idx) => {
                 const filteredItems = section.items.filter(item =>
                   item.name.toLowerCase().includes(sidebarSearch.toLowerCase()) ||
@@ -429,25 +469,46 @@ function App() {
 
                 return (
                   <div key={idx} className="space-y-2">
-                    <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3">
-                      {section.title}
-                    </h2>
+                    {!miniSidebar && (
+                      <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3">
+                        {section.title}
+                      </h2>
+                    )}
+                    {miniSidebar && idx === 0 && <div className="h-4"></div>} {/* Spacer */}
+
                     <div className="space-y-1">
                       {filteredItems.map((item) => (
                         <button
                           key={item.id}
                           onClick={() => {
                             setActiveView(item.id)
-                            setSidebarOpen(false)
                             setSidebarSearch('')
+                            if (window.innerWidth < 1024) setSidebarOpen(false)
                           }}
-                          className={`w-full flex flex-col items-start px-4 py-3 rounded-2xl text-xs transition-all duration-300 ${activeView === item.id
+                          className={`group w-full flex items-center ${miniSidebar ? 'justify-center py-3 px-0' : 'justify-start px-4 py-3'} rounded-2xl text-xs transition-all duration-300 relative ${activeView === item.id
                             ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50'
                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                             }`}
+                          title={miniSidebar ? item.name : ''}
                         >
-                          <span className="font-black uppercase tracking-tight">{item.name}</span>
-                          <span className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">{item.description}</span>
+                          <span className={`flex items-center justify-center ${activeView === item.id ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[item.id] || "M13 10V3L4 14h7v7l9-11h-7z"} />
+                            </svg>
+                          </span>
+
+                          {!miniSidebar && (
+                            <div className="ml-3 text-left">
+                              <span className="block font-black uppercase tracking-tight leading-none">{item.name}</span>
+                              <span className="block text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-wider leading-none">{item.description}</span>
+                            </div>
+                          )}
+
+                          {miniSidebar && (
+                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-2 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl uppercase tracking-wider">
+                              {item.name}
+                            </div>
+                          )}
                         </button>
                       ))}
                     </div>

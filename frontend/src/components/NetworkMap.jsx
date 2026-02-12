@@ -313,6 +313,10 @@ const NetworkMap = () => {
             .attr("stroke", d => getColor(d.group).stroke)
             .attr("stroke-width", 2)
             .attr("cursor", "pointer")
+            .on("click", (event, d) => {
+                focusOnNode(d);
+                event.stopPropagation();
+            })
             .call(d3.drag()
                 .on("start", (event, d) => {
                     if (!event.active) sim.alphaTarget(0.3).restart();
