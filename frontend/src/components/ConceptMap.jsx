@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as d3 from 'd3';
 
-// Definiciones del Mapa (Hardcoded from Mapa.html)
+// Definiciones del Mapa (69 Términos)
 const definitions = {
     "1. Célula": "Unidad estructural y funcional básica de los organismos, compuesta por componentes que permiten metabolismo, replicación y respuesta al entorno.",
     "2. Teoría celular": "Postulado biológico que establece que los organismos están formados por células y que la célula es la unidad fundamental de vida.",
@@ -76,48 +77,30 @@ const definitions = {
 };
 
 const ConceptMap = () => {
-    const [zoomLevel, setZoomLevel] = useState(1);
     const [selectedTerm, setSelectedTerm] = useState(null);
-    const chartRef = useRef(null);
-    const containerRef = useRef(null);
-    const [renderKey, setRenderKey] = useState(0);
-
-    // Initial render logic
-    useEffect(() => {
-        const renderDiagram = async () => {
-            if (!chartRef.current) return;
-
-            // Clear previous content
-            chartRef.current.innerHTML = '';
-            
-            mermaid.initialize({
-                startOnLoad: false,
-                theme: 'default',
-                securityLevel: 'loose',
-                fontFamily: 'Inter, sans-serif',
-                flowchart: {
-                    useMaxWidth: false,
-                    htmlLabels: true,
-                    curve: 'basis'
-                }
-            });
-
-            const graphDefinition = `
-flowchart LR
-    classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold;
-    classDef important fill:#eff6ff,stroke:#3b82f6,stroke-width:3px,color:#1d4ed8;
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isRendering, setIsRendering] = useState(true);
     
-    C1["1. Célula"]:::important -->|sustenta| C2["2. Teoría celular"]
-    C1 -->|presenta| C3["3. Ciclo de vida celular"]
-    C1 -->|ejecuta| C4["4. Vía metabólica"]
-    C1 -->|contiene| C5["5. ADN"]:::important
-    C1 -->|contiene| C6["6. ARN"]:::important
-    C1 -->|produce| C7["7. Proteína"]:::important
-    %% ... (rest of the graph definition remains same)
-`;
-            
-            // Re-using the same long graph definition from the original file
-            const fullGraphDef = `
+    const svgRef = useRef(null);
+    const gRef = useRef(null);
+    const containerRef = useRef(null);
+    const zoomRef = useRef(null);
+
+    // Initial render and setup D3 Zoom
+    useEffect(() => {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' }
+        });
+
+        renderDiagram();
+    }, []);
+
+    const renderDiagram = async () => {
+        setIsRendering(true);
+        const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
     classDef highlight fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1d4ed8;
@@ -198,206 +181,211 @@ flowchart LR
     C66 -->|se apoya en| C69["69. Bioinformática"]:::highlight
 `;
 
-            try {
-                // Ensure unique ID for each render to avoid conflicts
-                const id = `mermaid-chart-${Date.now()}`;
-                const { svg } = await mermaid.render(id, fullGraphDef);
-                if (chartRef.current) {
-                    chartRef.current.innerHTML = svg;
-                    // Add small delay to ensure SVG is in DOM before calculating zoom
-                    setTimeout(fitToScreen, 100);
-                }
-            } catch (error) {
-                console.error('Mermaid render error:', error);
+        try {
+            const { svg: svgContent } = await mermaid.render('mermaid-svg-render', graphDefinition);
+            if (gRef.current) {
+                gRef.current.innerHTML = svgContent;
+                setupD3Interaction();
             }
-        };
-
-        // Use requestAnimationFrame to ensure the DOM is ready
-        const timer = setTimeout(() => {
-            renderDiagram();
-        }, 100);
-
-        return () => clearTimeout(timer);
-    }, [renderKey]); // Re-render when key changes
-
-    // Add click listeners to nodes
-    useEffect(() => {
-        const handleNodeClick = (e) => {
-            const node = e.target.closest('.node');
-            if (node) {
-                // Try to find text content
-                const textElement = node.querySelector('span, p, div') || node;
-                const text = textElement.textContent.trim();
-
-                // Match against keys in definitions
-                // Sometimes mermaid adds extra whitespace or newlines
-                const matchingKey = Object.keys(definitions).find(key => text.includes(key) || key.includes(text));
-
-                if (matchingKey) {
-                    setSelectedTerm({
-                        term: matchingKey,
-                        definition: definitions[matchingKey]
-                    });
-                }
-            }
-        };
-
-        const chartElement = chartRef.current;
-        if (chartElement) {
-            chartElement.addEventListener('click', handleNodeClick);
-        }
-
-        return () => {
-            if (chartElement) {
-                chartElement.removeEventListener('click', handleNodeClick);
-            }
-        };
-    }, []);
-
-    const zoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 3));
-    const zoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.3));
-    const resetZoom = () => setZoomLevel(1);
-
-    const fitToScreen = () => {
-        if (containerRef.current && chartRef.current) {
-            // Simple fit logic - adjust as needed based on actual dimensions
-            setZoomLevel(0.8);
+        } catch (error) {
+            console.error('Mermaid render error:', error);
+        } finally {
+            setIsRendering(false);
         }
     };
 
+    const setupD3Interaction = () => {
+        const svg = d3.select(svgRef.current);
+        const g = d3.select(gRef.current);
+        const innerSvg = g.select('svg');
+        
+        // Remove fixed dimensions from mermaid's svg to allow zooming
+        innerSvg.attr('width', '100%').attr('height', '100%').attr('style', '');
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            });
+
+        zoomRef.current = zoom;
+        svg.call(zoom);
+
+        // Click listeners for nodes
+        g.selectAll('.node').on('click', function(event) {
+            event.stopPropagation();
+            const text = d3.select(this).text().trim();
+            const matchingKey = Object.keys(definitions).find(key => text.includes(key) || key.includes(text));
+            if (matchingKey) {
+                setSelectedTerm({ term: matchingKey, definition: definitions[matchingKey] });
+            }
+        });
+
+        // Initial fit
+        const bbox = g.node().getBBox();
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        const scale = 0.9 / Math.max(bbox.width / width, bbox.height / height);
+        
+        svg.call(zoom.transform, d3.zoomIdentity
+            .translate(width / 2 - (bbox.x + bbox.width / 2) * scale, height / 2 - (bbox.y + bbox.height / 2) * scale)
+            .scale(scale)
+        );
+    };
+
+    const handleSearch = (e) => {
+        const val = e.target.value;
+        setSearchTerm(val);
+        if (!val || val.length < 2) return;
+
+        const matchingKey = Object.keys(definitions).find(key => key.toLowerCase().includes(val.toLowerCase()));
+        if (matchingKey) {
+            // Find node in SVG
+            const nodes = d3.select(gRef.current).selectAll('.node');
+            nodes.each(function() {
+                const nodeText = d3.select(this).text();
+                if (nodeText.includes(matchingKey)) {
+                    // Highlight and center
+                    const node = d3.select(this);
+                    const bbox = this.getBBox();
+                    const width = containerRef.current.clientWidth;
+                    const height = containerRef.current.clientHeight;
+                    const scale = 1.5;
+
+                    d3.select(svgRef.current).transition().duration(750).call(
+                        zoomRef.current.transform, 
+                        d3.zoomIdentity.translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale).scale(scale)
+                    );
+                    
+                    // Visual pulse
+                    node.transition().duration(200).style('opacity', 0.3).transition().duration(500).style('opacity', 1);
+                }
+            });
+        }
+    };
+
+    const zoomIn = () => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.3);
+    const zoomOut = () => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.7);
+    const resetZoom = () => {
+        const bbox = d3.select(gRef.current).node().getBBox();
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        const scale = 0.8 / Math.max(bbox.width / width, bbox.height / height);
+        d3.select(svgRef.current).transition().call(zoomRef.current.transform, d3.zoomIdentity.translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale).scale(scale));
+    };
+
     return (
-        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
-            {/* Header / Title Area */}
-            <div className="absolute top-0 left-0 right-0 z-10 p-6 pointer-events-none">
-                <div className="max-w-4xl mx-auto text-center pointer-events-auto">
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="inline-block bg-white/90 backdrop-blur-md border border-slate-200 shadow-lg rounded-2xl px-8 py-4"
-                    >
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase mb-1">
-                            🧬 Mapa Conceptual Interactivo
-                        </h1>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Biología Molecular - 69 Términos Conectados
-                        </p>
+        <div className="flex flex-col h-full bg-[#f8fafc] relative overflow-hidden font-sans" ref={containerRef}>
+            {/* Interactive Header */}
+            <div className="absolute top-0 left-0 right-0 z-20 p-6 pointer-events-none">
+                <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 pointer-events-auto">
+                    <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="bg-white/90 backdrop-blur-xl border border-slate-200 shadow-2xl rounded-[2rem] px-8 py-4 flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        </div>
+                        <div>
+                            <h1 className="text-lg font-black text-slate-900 tracking-tighter uppercase leading-none">Mapa Conceptual <span className="text-blue-600">Pro</span></h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Explorador Dinámico de Biología</p>
+                        </div>
                     </motion.div>
+
+                    <div className="flex items-center gap-3">
+                        <div className="relative group">
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={handleSearch}
+                                placeholder="Buscar concepto (ej: ADN)..."
+                                className="w-64 pl-10 pr-4 py-3 bg-white/90 backdrop-blur-xl border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none shadow-xl"
+                            />
+                            <svg className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Controls */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-slate-200">
-                <ControlButton onClick={zoomOut} icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
-                } />
-                <span className="w-16 text-center font-mono text-xs font-bold text-slate-600">
-                    {Math.round(zoomLevel * 100)}%
-                </span>
-                <ControlButton onClick={zoomIn} icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                } />
-                <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                <ControlButton onClick={resetZoom} label="1:1" />
-                <ControlButton onClick={fitToScreen} icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-                } />
+            {/* Main SVG Viewport */}
+            <div className="flex-1 w-full h-full cursor-grab active:cursor-grabbing relative">
+                {isRendering && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/50 backdrop-blur-sm">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em]">Renderizando Mapa...</p>
+                        </div>
+                    </div>
+                )}
+                <svg ref={svgRef} className="w-full h-full block">
+                    <g ref={gRef}></g>
+                </svg>
             </div>
 
-            {/* Diagram Container */}
-            <div
-                ref={containerRef}
-                className="flex-1 overflow-auto cursor-move bg-slate-50 dna-pattern relative"
-            >
-                <div
-                    style={{
-                        transform: `scale(${zoomLevel})`,
-                        transformOrigin: 'top center',
-                        transition: 'transform 0.3s ease-out'
-                    }}
-                    className="min-w-full min-h-full p-20 flex justify-center"
-                >
-                    <div ref={chartRef} className="mermaid-chart"></div>
+            {/* Dynamic Controls */}
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl p-3 rounded-[2rem] shadow-2xl border border-white/10">
+                <ControlButton onClick={zoomOut} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg>} />
+                <div className="w-px h-6 bg-white/10 mx-2"></div>
+                <button onClick={resetZoom} className="px-6 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-500/20">Ajustar a Pantalla</button>
+                <div className="w-px h-6 bg-white/10 mx-2"></div>
+                <ControlButton onClick={zoomIn} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg>} />
+            </div>
+
+            {/* Sidebar Guide */}
+            <div className="absolute right-8 top-1/2 -translate-y-1/2 z-10 hidden lg:flex flex-col gap-4">
+                <div className="bg-white/80 backdrop-blur-xl border border-slate-200 p-6 rounded-[2.5rem] shadow-2xl w-56 space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">Interacción</h4>
+                    <div className="space-y-3">
+                        <GuideItem icon="🖱️" text="Arrastra para mover el mapa" />
+                        <GuideItem icon="🔍" text="Usa scroll para zoom" />
+                        <GuideItem icon="👆" text="Click para ver definición" />
+                    </div>
                 </div>
             </div>
 
             {/* Definition Modal */}
             <AnimatePresence>
                 {selectedTerm && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setSelectedTerm(null)}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100"
-                        >
-                            <div className="bg-gradient-to-r from-blue-600 to-emerald-500 p-6 flex justify-between items-start">
-                                <h2 className="text-xl font-black text-white pr-8 leading-tight">
-                                    {selectedTerm.term}
-                                </h2>
-                                <button
-                                    onClick={() => setSelectedTerm(null)}
-                                    className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full p-1"
-                                >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
+                        <motion.div initial={{ scale: 0.9, y: 40, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 40, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20">
+                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-10 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-3xl rounded-full -mr-32 -mt-32"></div>
+                                <div className="relative z-10 flex justify-between items-start">
+                                    <div className="space-y-2">
+                                        <p className="text-blue-100/60 text-[10px] font-black uppercase tracking-[0.3em]">Definición Biológica</p>
+                                        <h2 className="text-3xl font-black text-white pr-10 leading-none tracking-tighter italic">
+                                            {selectedTerm.term}
+                                        </h2>
+                                    </div>
+                                    <button onClick={() => setSelectedTerm(null)} className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-2xl flex items-center justify-center transition-all group">
+                                        <svg className="w-5 h-5 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg>
+                                    </button>
+                                </div>
                             </div>
-                            <div className="p-8">
-                                <p className="text-lg text-slate-600 leading-relaxed font-medium">
-                                    {selectedTerm.definition}
+                            <div className="p-10 space-y-8">
+                                <p className="text-xl text-slate-600 leading-relaxed font-medium italic">
+                                    "{selectedTerm.definition}"
                                 </p>
-                            </div>
-                            <div className="px-8 pb-8 flex justify-end">
-                                <button
-                                    onClick={() => setSelectedTerm(null)}
-                                    className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
-                                >
-                                    Cerrar
-                                </button>
+                                <div className="flex justify-end border-t border-slate-100 pt-8">
+                                    <button onClick={() => setSelectedTerm(null)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">Entendido</button>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* Instructions */}
-            <div className="absolute top-24 right-6 w-64 bg-white/80 backdrop-blur border border-slate-200 rounded-xl p-4 shadow-lg text-xs hidden lg:block">
-                <h4 className="font-bold text-slate-800 uppercase mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Guía Rápida
-                </h4>
-                <ul className="space-y-1.5 text-slate-500">
-                    <li className="flex gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Click en cualquier término para ver su definición.</span>
-                    </li>
-                    <li className="flex gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Usa los controles inferiores para hacer zoom.</span>
-                    </li>
-                    <li className="flex gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Arrastra y desplázate para navegar por el mapa.</span>
-                    </li>
-                </ul>
-            </div>
         </div>
     );
 };
 
-const ControlButton = ({ onClick, icon, label }) => (
-    <button
-        onClick={onClick}
-        className="p-2 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors active:scale-95"
-    >
-        {icon || <span className="text-xs font-bold px-1">{label}</span>}
+const ControlButton = ({ onClick, icon }) => (
+    <button onClick={onClick} className="p-3 text-white/60 hover:text-white hover:bg-white/10 rounded-2xl transition-all active:scale-90">
+        {icon}
     </button>
+);
+
+const GuideItem = ({ icon, text }) => (
+    <div className="flex items-start gap-3">
+        <span className="text-sm">{icon}</span>
+        <p className="text-[10px] font-bold text-slate-500 uppercase leading-tight">{text}</p>
+    </div>
 );
 
 export default ConceptMap;
