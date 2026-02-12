@@ -83,6 +83,11 @@ const ConceptMap = () => {
     
     const chartRef = useRef(null);
     const containerRef = useRef(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState(0);
+    const [startY, setStartY] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
+    const [scrollTop, setScrollTop] = useState(0);
 
     useEffect(() => {
         mermaid.initialize({
@@ -231,6 +236,33 @@ flowchart LR
         });
     };
 
+    const handleMouseDown = (e) => {
+        setIsDragging(true);
+        setStartX(e.pageX - containerRef.current.offsetLeft);
+        setStartY(e.pageY - containerRef.current.offsetTop);
+        setScrollLeft(containerRef.current.scrollLeft);
+        setScrollTop(containerRef.current.scrollTop);
+    };
+
+    const handleMouseLeave = () => {
+        setIsDragging(false);
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const x = e.pageX - containerRef.current.offsetLeft;
+        const y = e.pageY - containerRef.current.offsetTop;
+        const walkX = (x - startX) * 1.5; // multiplicador de velocidad
+        const walkY = (y - startY) * 1.5;
+        containerRef.current.scrollLeft = scrollLeft - walkX;
+        containerRef.current.scrollTop = scrollTop - walkY;
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden">
             {/* Header / Search */}
@@ -264,7 +296,11 @@ flowchart LR
             {/* Diagram Area */}
             <div 
                 ref={containerRef}
-                className="flex-1 overflow-auto bg-slate-50 relative p-10 cursor-all-scroll"
+                onMouseDown={handleMouseDown}
+                onMouseLeave={handleMouseLeave}
+                onMouseUp={handleMouseUp}
+                onMouseMove={handleMouseMove}
+                className={`flex-1 overflow-auto bg-slate-50 relative p-10 select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
             >
                 {isLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
