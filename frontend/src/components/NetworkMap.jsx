@@ -200,6 +200,7 @@ const NetworkMap = () => {
 
     const [simulation, setSimulation] = useState(null);
     const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity);
+    const nodesRef = useRef([]);
 
     // --- COLORS ---
     const groupColors = {
@@ -264,6 +265,7 @@ const NetworkMap = () => {
         // Clone data to avoid mutation issues in React strict mode
         const nodes = graphData.nodes.map(d => ({ ...d }));
         const links = graphData.links.map(d => ({ ...d }));
+        nodesRef.current = nodes;
 
         // Calculate radius
         const nodeConnections = {};
@@ -389,16 +391,55 @@ const NetworkMap = () => {
         };
     }, []);
 
+    // Focus mechanism
+    const focusOnNode = (node) => {
+        if (!svgRef.current || !node || !containerRef.current) return;
+
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        const scale = 2.5; // Zoom in closer
+
+        // Center the node: width/2 = x * k + tx  =>  tx = width/2 - x * k
+        const tx = width / 2 - node.x * scale;
+        const ty = height / 2 - node.y * scale;
+
+        const svg = d3.select(svgRef.current);
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+
+        svg.transition()
+            .duration(1000)
+            .call(d3.zoom().on("zoom", (e) => {
+                svg.select("g").attr("transform", e.transform);
+                setZoomTransform(e.transform);
+            }).transform, transform);
+
+        // Highlight visual feedback
+        setSelectedTooltip({
+            x: width / 2 - 100, // Approximate center
+            y: height / 2 - 100,
+            data: node
+        });
+    };
+
     // Search functionality
     useEffect(() => {
-        if (!searchTerm || searchTerm.length < 2) {
+        if (!searchTerm || searchTerm.length < 1) {
             setSearchResults([]);
             return;
         }
+        const term = searchTerm.toLowerCase();
         const matches = graphData.nodes.filter(n =>
-            (n.label || n.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (n.concepto || "").toLowerCase().includes(searchTerm.toLowerCase())
-        );
+            (n.label || n.id).toLowerCase().includes(term) ||
+            (n.concepto || "").toLowerCase().includes(term)
+        ).sort((a, b) => {
+            const aLabel = (a.label || "").toLowerCase();
+            const bLabel = (b.label || "").toLowerCase();
+            const aStarts = aLabel.startsWith(term);
+            const bStarts = bLabel.startsWith(term);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return 0;
+        });
         setSearchResults(matches);
     }, [searchTerm]);
 
@@ -442,7 +483,7 @@ const NetworkMap = () => {
                     <div className="mt-2 relative">
                         <input
                             type="text"
-                            placeholder="Buscar concepto..."
+                            placeholder="Buscar N° o concepto..."
                             className="w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -454,9 +495,12 @@ const NetworkMap = () => {
                                         key={result.id}
                                         className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
                                         onClick={() => {
+                                            const activeNode = nodesRef.current.find(n => n.id === result.id);
+                                            if (activeNode) {
+                                                focusOnNode(activeNode);
+                                            }
                                             setSearchTerm(result.label);
                                             setSearchResults([]);
-                                            // Ideally pass center logic here
                                         }}
                                     >
                                         <div className="font-bold text-xs text-slate-800">{result.label}</div>
