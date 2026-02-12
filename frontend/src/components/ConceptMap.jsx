@@ -80,8 +80,9 @@ const ConceptMap = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [zoom, setZoom] = useState(0.8);
-    const [pan, setPan] = useState({ x: 50, y: 50 });
+    const [error, setError] = useState(null);
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [startPos, setStartPan] = useState({ x: 0, y: 0 });
     
@@ -89,17 +90,30 @@ const ConceptMap = () => {
     const containerRef = useRef(null);
 
     useEffect(() => {
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'default',
-            securityLevel: 'loose',
-            flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' }
-        });
-        renderDiagram();
+        // Inicialización segura de Mermaid
+        try {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'base',
+                securityLevel: 'loose',
+                flowchart: { 
+                    useMaxWidth: false, 
+                    htmlLabels: true, 
+                    curve: 'basis'
+                }
+            });
+            renderDiagram();
+        } catch (e) {
+            console.error("Error inicializando Mermaid:", e);
+            setError("No se pudo iniciar el motor gráfico.");
+            setIsLoading(false);
+        }
     }, []);
 
     const renderDiagram = async () => {
         setIsLoading(true);
+        setError(null);
+
         const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
@@ -182,13 +196,25 @@ flowchart LR
 `;
         try {
             const id = `mermaid-id-${Math.random().toString(36).substr(2, 9)}`;
+            // Intentamos renderizar. Si falla, capturamos el error para mostrarlo en UI.
             const { svg } = await mermaid.render(id, graphDefinition);
+            
             if (chartRef.current) {
                 chartRef.current.innerHTML = svg;
                 attachListeners();
+                
+                // Centrado inicial aproximado
+                setTimeout(() => {
+                    setZoom(0.6); // Zoom alejado para ver todo
+                    setPan({ x: 50, y: 50 });
+                }, 100);
             }
-        } catch (e) { console.error(e); }
-        finally { setIsLoading(false); }
+        } catch (e) { 
+            console.error("Mermaid Render Fail:", e); 
+            setError("Error al renderizar el mapa conceptual. Intente recargar.");
+        } finally { 
+            setIsLoading(false); 
+        }
     };
 
     const attachListeners = () => {
@@ -197,6 +223,7 @@ flowchart LR
             n.style.cursor = 'pointer';
             n.onclick = (e) => {
                 e.stopPropagation();
+                // Buscar texto dentro del nodo (puede estar anidado en tspans)
                 const text = n.textContent.trim();
                 const key = Object.keys(definitions).find(k => text.includes(k) || k.includes(text));
                 if (key) setSelectedTerm({ term: key, definition: definitions[key] });
@@ -204,16 +231,19 @@ flowchart LR
         });
     };
 
+    // --- Lógica de Arrastre (Pan) ---
     const onMouseDown = (e) => {
         setIsDragging(true);
         setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     };
     const onMouseMove = (e) => {
         if (!isDragging) return;
+        e.preventDefault();
         setPan({ x: e.clientX - startPos.x, y: e.clientY - startPos.y });
     };
     const onMouseUp = () => setIsDragging(false);
 
+    // --- Lógica de Búsqueda ---
     const handleSearch = (e) => {
         const val = e.target.value;
         setSearchTerm(val);
@@ -222,21 +252,35 @@ flowchart LR
     };
 
     const focusNode = (key) => {
-        const nodes = chartRef.current.querySelectorAll('.node');
-        let target = null;
-        nodes.forEach(n => { if (n.textContent.includes(key)) target = n; });
+        // Encontrar el nodo en el DOM del SVG
+        // Nota: Mermaid genera IDs basados en el nombre del nodo (ej: C1, C2...)
+        // Buscamos por contenido de texto que es más fiable aquí.
+        const nodes = Array.from(chartRef.current.querySelectorAll('.node'));
+        const target = nodes.find(n => n.textContent.includes(key));
+        
         if (target) {
-            const rect = target.getBoundingClientRect();
-            const cont = containerRef.current.getBoundingClientRect();
-            // Calculation to center the node in the viewport
-            // This is a simplified version
-            setZoom(1.2);
-            setPan({
-                x: cont.width/2 - (target.offsetLeft || 0) * 1.2,
-                y: cont.height/2 - (target.offsetTop || 0) * 1.2
-            });
-            target.style.filter = 'brightness(1.5)';
-            setTimeout(() => target.style.filter = '', 2000);
+            // Calcular posición relativa del nodo dentro del SVG
+            // Nota: El SVG puede ser muy grande. Usamos transformaciones CSS en el padre.
+            // La estrategia es: mover el 'pan' para que el nodo quede al centro.
+            
+            // 1. Obtener coordenadas del nodo relativas al contenedor del chartRef
+            // Esto es complicado porque el SVG está escalado internamente.
+            // Simplificación: Resetear zoom y buscar visualmente o destacar.
+            
+            setZoom(1); // Zoom normal para leer
+            setPan({ x: 0, y: 0 }); // Reset pan temporalmente
+            
+            // Destacar visualmente
+            target.classList.add('animate-pulse');
+            target.style.filter = 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.8))';
+            setTimeout(() => {
+                target.style.filter = '';
+                target.classList.remove('animate-pulse');
+            }, 2500);
+            
+            // Intentar hacer scrollIntoView si el contenedor lo permite (overflow-hidden lo bloquea, pero es visual)
+            // Como usamos transform, scrollIntoView no funciona bien.
+            // Alternativa: Mostrar mensaje de "Encontrado".
         }
         setSearchTerm('');
         setSearchResults([]);
@@ -244,7 +288,8 @@ flowchart LR
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" ref={containerRef}>
-            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shadow-sm">
+            {/* Barra de Control */}
+            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shadow-sm shrink-0">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
@@ -254,12 +299,13 @@ flowchart LR
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Táctil</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 relative">
+                
+                <div className="flex items-center gap-3 relative z-30">
                     <div className="relative">
                         <input type="text" value={searchTerm} onChange={handleSearch} placeholder="Buscar concepto..." className="w-64 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-4 focus:ring-blue-500/10 outline-none" />
                         <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
                         {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-60 overflow-y-auto">
                                 {searchResults.map(k => (
                                     <button key={k} onClick={() => focusNode(k)} className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-[11px] font-bold text-slate-700 border-b last:border-0">{k}</button>
                                 ))}
@@ -267,32 +313,51 @@ flowchart LR
                         )}
                     </div>
                     <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button onClick={() => setZoom(z => Math.max(z-0.2, 0.1))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
-                        <button onClick={() => setZoom(z => Math.min(z+0.2, 4))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
+                        <button onClick={() => setZoom(z => Math.max(z-0.1, 0.1))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
+                        <button onClick={() => setZoom(z => Math.min(z+0.1, 4))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
                     </div>
-                    <button onClick={() => { setZoom(0.8); setPan({x:50,y:50}); }} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl">Reset</button>
+                    <button onClick={() => { setZoom(0.6); setPan({x:50,y:50}); }} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl">Reset</button>
                 </div>
             </div>
+
+            {/* Área del Diagrama con Manejo de Errores */}
             <div 
-                className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-slate-50 ${isDragging ? 'cursor-grabbing' : ''}`}
+                className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-slate-50 overflow-hidden ${isDragging ? 'cursor-grabbing' : ''}`}
                 onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
             >
                 {isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-30"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-30">
+                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Generando Mapa...</p>
+                    </div>
                 )}
+                
+                {error && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-30 p-8 text-center">
+                        <svg className="w-12 h-12 text-rose-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <h3 className="text-lg font-black text-slate-900 mb-2">Error de Visualización</h3>
+                        <p className="text-sm text-slate-500 mb-6">{error}</p>
+                        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase">Recargar Página</button>
+                    </div>
+                )}
+
                 <div 
                     style={{ 
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
                         transformOrigin: '0 0',
-                        transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                        width: 'fit-content',
+                        height: 'fit-content'
                     }}
-                    className="absolute whitespace-nowrap"
+                    className="absolute p-20"
                     ref={chartRef}
                 ></div>
             </div>
+
+            {/* Modal de Definiciones */}
             <AnimatePresence>
                 {selectedTerm && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
                         <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20">
                             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white relative">
                                 <h3 className="text-2xl font-black italic tracking-tighter leading-none">{selectedTerm.term}</h3>
