@@ -79,6 +79,7 @@ const ConceptMap = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [zoom, setZoom] = useState(0.7);
     const [pan, setPan] = useState({ x: 20, y: 20 });
     const [isDragging, setIsDragging] = useState(false);
