@@ -6,9 +6,6 @@ import CodonVisualization from './components/CodonVisualization'
 import GeneStatistics from './components/GeneStatistics'
 import DataExport from './components/DataExport'
 import AIValidation from './components/AIValidation'
-import GenomeSelector from './components/GenomeSelector'
-import GenomeComparison from './components/GenomeComparison'
-import MultiGenomeAnalyzer from './components/MultiGenomeAnalyzer'
 import GenomeMultiSelector from './components/GenomeMultiSelector'
 import ComparisonResults from './components/ComparisonResults'
 import InteractiveChat from './components/InteractiveChat'
@@ -22,6 +19,8 @@ import BLASTSearch from './components/BLASTSearch'
 import PhylogeneticTree from './components/PhylogeneticTree'
 import FunctionalCategories from './components/FunctionalCategories'
 import CAIAnalysis from './components/CAIAnalysis'
+import ConceptMap from './components/ConceptMap'
+import NetworkMap from './components/NetworkMap'
 import { api } from './services/api'
 
 function App() {
@@ -142,7 +141,7 @@ function App() {
 
       for (let i = 0; i < selectedGenomes.length; i++) {
         const accession = selectedGenomes[i]
-        console.log(`📂 [${i+1}/${selectedGenomes.length}] Procesando: ${accession}`)
+        console.log(`📂 [${i + 1}/${selectedGenomes.length}] Procesando: ${accession}`)
 
         const isAlreadyDownloaded = downloadedGenomes.some(g => g.accession === accession)
 
@@ -172,7 +171,7 @@ function App() {
           console.log(`⏳ [${accession}] Iniciando polling de estado...`)
           while (!downloadComplete && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 1500)) // Esperar 1.5s entre encuestas
-            
+
             const status = await api.getGenomeDownloadStatus(accession)
             console.log(`📊 [${accession}] Intento ${attempts + 1}: ${status.status} - ${status.message}`)
 
@@ -211,20 +210,20 @@ function App() {
       // Activar el último para análisis detallado
       const lastGenome = successfulGenomes[successfulGenomes.length - 1]
       console.log(`🎯 [ANALYSIS] Activando genoma principal: ${lastGenome}`)
-      
+
       await api.activateGenome(lastGenome)
       await loadFiles()
-      
+
       toast.loading('Calculando métricas moleculares finales...', { id: 'analysis' })
       const detailedAnalysis = await api.runCompleteAnalysis()
       setAnalysisData(detailedAnalysis)
-      
+
       setCurrentStep(3)
       setActiveView('comparison')
       await loadDownloadedGenomes()
 
       toast.success(
-        failedGenomes.length > 0 
+        failedGenomes.length > 0
           ? `Análisis parcial: ${successfulGenomes.length} OK, ${failedGenomes.length} Error`
           : `Análisis completado: ${successfulGenomes.length} genomas procesados`,
         { id: 'analysis' }
@@ -303,6 +302,8 @@ function App() {
         { id: 'dogma', name: 'Dogma Central', description: 'DNA → RNA → Proteína' },
         { id: 'gc-window', name: 'Ventana GC', description: 'Contenido GC por ventana' },
         { id: 'blast', name: 'BLAST Search', description: 'Búsqueda de similitud' },
+        { id: 'concept-map', name: 'Mapa Conceptual', description: 'Referencia Interactiva de Biología' },
+        { id: 'network-map', name: 'Red Genómica Pro', description: 'Visualización Avanzada de Conceptos' },
       ]
     },
     {
@@ -370,21 +371,19 @@ function App() {
                     }
                   }}
                   disabled={step.id > currentStep && !(step.id === 2 && downloadedGenomes.length > 0)}
-                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm transition-all duration-300 ${
-                    step.id === currentStep
-                      ? 'bg-blue-600 text-white shadow-xl shadow-blue-200'
-                      : step.id < currentStep
+                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm transition-all duration-300 ${step.id === currentStep
+                    ? 'bg-blue-600 text-white shadow-xl shadow-blue-200'
+                    : step.id < currentStep
                       ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                       : 'bg-slate-100/50 text-slate-400 cursor-not-allowed opacity-50'
-                  }`}
+                    }`}
                 >
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black ${
-                    step.id === currentStep
-                      ? 'bg-white/20'
-                      : step.id < currentStep
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black ${step.id === currentStep
+                    ? 'bg-white/20'
+                    : step.id < currentStep
                       ? 'bg-blue-100'
                       : 'bg-slate-200'
-                  }`}>
+                    }`}>
                     {step.id < currentStep ? (
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -442,11 +441,10 @@ function App() {
                             setSidebarOpen(false)
                             setSidebarSearch('')
                           }}
-                          className={`w-full flex flex-col items-start px-4 py-3 rounded-2xl text-xs transition-all duration-300 ${
-                            activeView === item.id
-                              ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50'
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                          }`}
+                          className={`w-full flex flex-col items-start px-4 py-3 rounded-2xl text-xs transition-all duration-300 ${activeView === item.id
+                            ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            }`}
                         >
                           <span className="font-black uppercase tracking-tight">{item.name}</span>
                           <span className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">{item.description}</span>
@@ -533,6 +531,19 @@ function App() {
                   <p className="text-slate-500 font-medium leading-relaxed">
                     Selecciona los genomas de interés. El sistema sincronizará los datos directamente desde las bases de datos de NCBI.
                   </p>
+                </div>
+
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => {
+                      setCurrentStep(3)
+                      setActiveView('network-map')
+                    }}
+                    className="flex items-center gap-3 px-6 py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-200 transition-all hover:bg-emerald-600 hover:-translate-y-1 active:scale-95"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    Explorar Mapa Pro
+                  </button>
                 </div>
 
                 <GenomeMultiSelector
@@ -627,7 +638,7 @@ function App() {
                   </div>
                 )}
 
-                <div className="bg-white rounded-[3rem] border border-slate-100 p-10 shadow-sm min-h-[800px]">
+                <div className={`bg-white rounded-[3rem] border border-slate-100 shadow-sm min-h-[800px] ${activeView === 'network-map' ? 'p-0 overflow-hidden' : 'p-10'}`}>
                   {activeView === 'dashboard' && <AnalysisDashboard analysisData={analysisData} isLoading={isLoading} status={analysisData ? 'completed' : 'idle'} />}
                   {activeView === 'codons' && <CodonVisualization codonData={analysisData?.codons} />}
                   {activeView === 'comparison' && <ComparisonResults comparisonResult={comparisonResult} selectedGenomes={selectedGenomes} />}
@@ -643,17 +654,19 @@ function App() {
                   {activeView === 'phylo' && <PhylogeneticTree />}
                   {activeView === 'cog' && <FunctionalCategories />}
                   {activeView === 'cai' && <CAIAnalysis />}
+                  {activeView === 'concept-map' && <ConceptMap />}
+                  {activeView === 'network-map' && <NetworkMap />}
                   {activeView === 'chat' && <InteractiveChat hasAnalysis={!!analysisData} currentGenome={currentGenome} />}
                   {activeView === 'ai' && (
-                    <AIValidation 
-                      validationData={aiValidation} 
+                    <AIValidation
+                      validationData={aiValidation}
                       technicalValidation={analysisData?.validation}
-                      isValidating={isValidatingAI} 
-                      onValidate={runAIValidation} 
-                      hasAnalysis={!!analysisData} 
-                      comparisonData={comparisonResult} 
-                      selectedGenomes={selectedGenomes} 
-                      currentGenome={currentGenome} 
+                      isValidating={isValidatingAI}
+                      onValidate={runAIValidation}
+                      hasAnalysis={!!analysisData}
+                      comparisonData={comparisonResult}
+                      selectedGenomes={selectedGenomes}
+                      currentGenome={currentGenome}
                     />
                   )}
                   {activeView === 'export' && <DataExport hasData={analysisData !== null} comparisonData={comparisonResult} currentGenome={currentGenome} selectedGenomes={selectedGenomes} />}

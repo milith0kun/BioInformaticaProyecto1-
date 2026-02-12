@@ -1,4 +1,4 @@
-# Plan de Mejoras - Sistema de Análisis Genómico
+    # Plan de Mejoras - Sistema de Análisis Genómico
 
 ## Resumen
 Mejorar el sistema usando la API de NCBI correctamente, agregar nuevas funcionalidades bioinformáticas, mejorar el chat IA, y redeseñar el dashboard.

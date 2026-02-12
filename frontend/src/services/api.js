@@ -240,6 +240,16 @@ export const api = {
     return response.data
   },
 
+  getProteinStructureAnalysis: async (proteinId) => {
+    const response = await axiosInstance.get(`/ncbi/protein/analyze-structure/${proteinId}`, { timeout: 180000 })
+    return response.data
+  },
+
+  getProteinStructurePipeline: async (proteinId) => {
+    const response = await axiosInstance.get(`/ncbi/protein/structure-pipeline/${proteinId}`, { timeout: 180000 })
+    return response.data
+  },
+
   // Gene Location
   getGeneAtPosition: async (position) => {
     const response = await axiosInstance.get(`/ncbi/gene-at-position/${position}`)

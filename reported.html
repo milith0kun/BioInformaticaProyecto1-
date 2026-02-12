@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Mapa Conceptual Interactivo - Versión Pro</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  
+  body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    margin: 0; 
+    overflow: hidden; 
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  
+  /* Header */
+  .header {
+    background: rgba(255, 255, 255, 0.98);
+    padding: 12px 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid #667eea;
+  }
+
+  .header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #2d3748;
+  }
+
+  .header-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  /* Botones */
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+  }
+
+  .btn-primary {
+    background: #667eea;
+    color: white;
+  }
+
+  .btn-secondary {
+    background: #48bb78;
+    color: white;
+  }
+
+  .btn-danger {
+    background: #f56565;
+    color: white;
+  }
+
+  /* Mini-mapa */
+  .minimap-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    overflow: hidden;
+    border: 2px solid #667eea;
+    z-index: 1000;
+  }
+
+  .minimap-container svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .minimap-viewport {
+    fill: rgba(102, 126, 234, 0.3);
+    stroke: #667eea;
+    stroke-width: 2;
+    cursor: move;
+  }
+
+  /* Buscador */
+  .search-container {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    z-index: 1000;
+  }
+
+  .search-input {
+    width: 280px;
+    padding: 10px 15px;
+    border: 2px solid #667eea;
+    border-radius: 25px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    outline: none;
+    transition: all 0.3s;
+  }
+
+  .search-input:focus {
+    width: 320px;
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  }
+
+  .search-results {
+    margin-top: 5px;
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: none;
+  }
+
+  .search-results.visible {
+    display: block;
+  }
+
+  .search-result-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #e2e8f0;
+    transition: background 0.2s;
+  }
+
+  .search-result-item:hover {
+    background: #f7fafc;
+  }
+
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    background: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    max-width: 300px;
+    font-size: 13px;
+    line-height: 1.5;
+    transition: opacity 0.2s;
+    border-left: 4px solid #667eea;
+    z-index: 2000;
+  }
+  
+  .tooltip b { 
+    display: block; 
+    margin-bottom: 6px; 
+    font-size: 15px; 
+    color: #2d3748; 
+  }
+
+  /* Nodos */
+  .node {
+    cursor: move;
+    transition: all 0.2s;
+  }
+
+  .node:hover {
+    filter: brightness(1.1);
+  }
+
+  .node.pinned {
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 0 5px rgba(102, 126, 234, 0.6));
+  }
+
+  .node-label {
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: none;
+    text-shadow: 
+      1px 1px 2px white, -1px -1px 2px white,
+      1px -1px 2px white, -1px 1px 2px white,
+      0 0 4px white;
+    transition: opacity 0.2s;
+  }
+
+  /* Enlaces */
+  .link {
+    transition: all 0.3s ease;
+  }
+
+  .link-hitarea {
+    stroke: transparent;
+    stroke-width: 15;
+    cursor: pointer;
+    fill: none;
+  }
+
+  .link-label {
+    font-size: 9px;
+    fill: #4a5568;
+    font-style: italic;
+    font-weight: 500;
+    pointer-events: none;
+    text-shadow: 
+      0 0 4px white, 0 0 4px white,
+      0 0 6px white;
+    transition: all 0.3s ease;
+  }
+
+  .link-label.selected {
+    font-size: 12px !important;
+    font-weight: bold !important;
+    fill: #e53e3e !important;
+    filter: drop-shadow(0 0 6px rgba(229, 62, 62, 0.8));
+  }
+
+  /* Indicador de selección */
+  .selection-indicator {
+    position: absolute;
+    bottom: 190px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(229, 62, 62, 0.4);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 80%;
+    text-align: center;
+  }
+
+  .selection-indicator.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-10px);
+  }
+
+  /* Controles de navegación */
+  .nav-controls {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000;
+  }
+
+  .nav-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #667eea;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+
+  .nav-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: scale(1.1);
+  }
+
+  /* Contenedor del grafo */
+  #graph-container {
+    width: 100vw;
+    height: calc(100vh - 60px);
+    cursor: grab;
+    position: relative;
+  }
+
+  #graph-container.grabbing {
+    cursor: grabbing;
+  }
+
+  /* Leyenda de grupos */
+  .legend {
+    position: absolute;
+    top: 80px;
+    left: 320px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    font-size: 12px;
+    z-index: 1000;
+    max-width: 200px;
+  }
+
+  .legend h4 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: #2d3748;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 5px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+  }
+
+  .legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+
+  /* Animación de pulso */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .link.selected {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Pin icon */
+  .pin-icon {
+    font-size: 10px;
+    pointer-events: none;
+  }
+
+  /* Scrollbar personalizado para resultados */
+  .search-results::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .search-results::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  .search-results::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h2>🗺️ Mapa Conceptual Interactivo</h2>
+  <div class="header-controls">
+    <button class="btn btn-secondary" onclick="autoOrganize()">📐 Auto-organizar</button>
+    <button class="btn btn-primary" onclick="fitToScreen()">🎯 Ver todo</button>
+    <button class="btn btn-danger" onclick="clearSelection()">✖ Deseleccionar</button>
+  </div>
+</div>
+
+<!-- Buscador -->
+<div class="search-container">
+  <input 
+    type="text" 
+    class="search-input" 
+    id="searchInput"
+    placeholder="🔍 Buscar concepto..."
+    autocomplete="off"
+  >
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<!-- Leyenda -->
+<div class="legend" id="legend"></div>
+
+<!-- Controles de navegación -->
+<div class="nav-controls">
+  <button class="nav-btn" onclick="adjustZoom(1.2)" title="Zoom In">+</button>
+  <button class="nav-btn" onclick="adjustZoom(0.8)" title="Zoom Out">−</button>
+  <button class="nav-btn" onclick="resetView()" title="Resetear" style="font-size: 20px;">↻</button>
+</div>
+
+<!-- Indicador de selección -->
+<div id="selection-indicator" class="selection-indicator"></div>
+
+<!-- Tooltip -->
+<div id="tooltip" class="tooltip"></div>
+
+<!-- Mini-mapa -->
+<div class="minimap-container">
+  <svg id="minimap"></svg>
+</div>
+
+<!-- Contenedor del grafo -->
+<div id="graph-container"></div>
+
+<script>
+
+// --- 1. DATOS (PEGAR AQUÍ TU JSON) ---
+const graph = 
+{
+  "nodes": [
+    { "id": "Celula", "label": "1. Célula", "group": "fundamentales", "concepto": "Unidad estructural y funcional básica de los seres vivos." },
+    { "id": "TeoriaCelular", "label": "2. Teoría celular", "group": "fundamentales", "concepto": "Postula que la célula es la unidad de vida, todas provienen de preexistentes y el organismo es un conjunto de ellas." },
+    { "id": "CicloVida", "label": "3. Ciclo de vida celular", "group": "fundamentales", "concepto": "Serie de eventos que conducen al crecimiento y división de una célula (G1, S, G2, M)." },
+    { "id": "Eucariota", "label": "22. Célula eucariota", "group": "fundamentales", "concepto": "Célula con núcleo definido y orgánulos membranosos (ej. células animales y vegetales)." },
+    { "id": "Procariota", "label": "23. Célula procariota", "group": "fundamentales", "concepto": "Célula sin núcleo verdadero, el ADN está libre en el citoplasma (ej. bacterias)." },
+    { "id": "ADN", "label": "5. ADN", "group": "estructurales", "concepto": "Ácido desoxirribonucleico; molécula que contiene la información genética hereditaria." },
+    { "id": "ARN", "label": "6. ARN", "group": "estructurales", "concepto": "Ácido ribonucleico; molécula que transmite el código genético y participa en la síntesis de proteínas." },
+    { "id": "Proteina", "label": "7. Proteína", "group": "estructurales", "concepto": "Macromolécula formada por aminoácidos que ejecuta la mayoría de las funciones celulares." },
+    { "id": "Nucleotido", "label": "16. Nucleótido", "group": "estructurales", "concepto": "Monómero constituyente de los ácidos nucleicos, formado por un azúcar, un fosfato y una base nitrogenada." },
+    { "id": "Bases", "label": "17. Bases nitrogenadas", "group": "estructurales", "concepto": "Componentes del ADN y ARN (Adenina, Guanina, Citosina, Timina/Uracilo) que codifican la información." },
+    { "id": "Chargaff", "label": "18. Regla de Chargaff", "group": "estructurales", "concepto": "En el ADN, la cantidad de Adenina es igual a Timina, y la de Citosina igual a Guanina (A=T, C=G)." },
+    { "id": "DobleHelice", "label": "19. Doble hélice", "group": "estructurales", "concepto": "Estructura tridimensional del ADN, formada por dos cadenas enrolladas en espiral." },
+    { "id": "Complementariedad", "label": "20. Complementariedad", "group": "estructurales", "concepto": "Propiedad por la que las bases nitrogenadas se emparejan específicamente (A con T/U, C con G)." },
+    { "id": "Cromosoma", "label": "9. Cromosoma", "group": "estructurales", "concepto": "Estructura organizada de ADN y proteínas que se encuentra en el núcleo de las células eucariotas." },
+    { "id": "Gen", "label": "10. Gen", "group": "estructurales", "concepto": "Segmento de ADN que contiene la información para sintetizar una proteína o ARN funcional." },
+    { "id": "Exon", "label": "24. Exón", "group": "estructurales", "concepto": "Región de un gen que se conserva en el ARN maduro y codifica para la proteína." },
+    { "id": "Intron", "label": "25. Intrón", "group": "estructurales", "concepto": "Región no codificante de un gen que es eliminada durante el procesamiento del ARN (splicing)." },
+    { "id": "HerenciaMendeliana", "label": "11. Herencia mendeliana", "group": "estructurales", "concepto": "Patrones de transmisión de rasgos de padres a hijos descritos por Gregor Mendel." },
+    { "id": "Mutacion", "label": "12. Mutación", "group": "estructurales", "concepto": "Cambio permanente en la secuencia del ADN que puede alterar la información genética." },
+    { "id": "Ligamiento", "label": "13. Ligamiento genético", "group": "estructurales", "concepto": "Tendencia de los genes cercanos en el mismo cromosoma a heredarse juntos." },
+    { "id": "MapaGenetico", "label": "14. Mapa genético", "group": "estructurales", "concepto": "Representación lineal de la posición relativa de los genes en un cromosoma basada en la frecuencia de recombinación." },
+    { "id": "UnGenUnaProteina", "label": "15. Un gen-una proteína", "group": "estructurales", "concepto": "Hipótesis que establece que cada gen codifica para una única proteína (o polipéptido)." },
+    { "id": "Replicacion", "label": "21. Replicación del ADN", "group": "procesos", "concepto": "Proceso de duplicación del ADN para que las células hijas reciban una copia idéntica." },
+    { "id": "Transcripcion", "label": "26. Transcripción", "group": "procesos", "concepto": "Síntesis de ARN a partir de una plantilla de ADN." },
+    { "id": "Traduccion", "label": "30. Traducción", "group": "traduccion", "concepto": "Proceso en el que el ARNm es decodificado por el ribosoma para sintetizar una proteína." },
+    { "id": "DogmaCentral", "label": "41. Dogma central", "group": "procesos", "concepto": "Flujo unidireccional de la información biológica: ADN -> ARN -> Proteína." },
+    { "id": "ARNPolimerasa", "label": "27. ARN polimerasa", "group": "procesos", "concepto": "Enzima responsable de sintetizar ARN usando una hebra de ADN como molde." },
+    { "id": "ARNm", "label": "28. ARN mensajero", "group": "procesos", "concepto": "Tipo de ARN que lleva la información genética del ADN al ribosoma para la síntesis de proteínas." },
+    { "id": "Splicing", "label": "29. Splicing", "group": "procesos", "concepto": "Proceso de eliminación de intrones y unión de exones en el ARN pre-mensajero." },
+    { "id": "Ribosoma", "label": "31. Ribosoma", "group": "traduccion", "concepto": "Complejo molecular (ARNr + proteínas) donde se lleva a cabo la traducción." },
+    { "id": "Aminoacido", "label": "32. Aminoácido", "group": "traduccion", "concepto": "Monómero constituyente de las proteínas, unidos por enlaces peptídicos." },
+    { "id": "Polipeptido", "label": "33. Polipéptido", "group": "traduccion", "concepto": "Cadena lineal de aminoácidos que se pliega para formar una proteína funcional." },
+    { "id": "Codon", "label": "34. Codón", "group": "traduccion", "concepto": "Secuencia de tres nucleótidos en el ARNm que especifica un aminoácido o una señal de parada." },
+    { "id": "CodigoGenetico", "label": "35. Código genético", "group": "traduccion", "concepto": "Conjunto de reglas que define cómo los codones se traducen en aminoácidos." }, 
+    { "id": "Degeneracion", "label": "36. Degeneración del código", "group": "traduccion", "concepto": "Propiedad del código genético donde varios codones diferentes codifican el mismo aminoácido." },
+    { "id": "CodonInicio", "label": "37. Codón de inicio", "group": "traduccion", "concepto": "Codón (AUG) que marca el sitio donde comienza la traducción de una proteína." },
+    { "id": "CodonTerminacion", "label": "38. Codón de terminación", "group": "traduccion", "concepto": "Codones (UAA, UAG, UGA) que señalan el final de la síntesis proteica." },
+    { "id": "ARNt", "label": "39. ARN de transferencia", "group": "traduccion", "concepto": "Tipo de ARN que transporta aminoácidos específicos al ribosoma durante la traducción." },
+    { "id": "Anticodon", "label": "40. Anticodón", "group": "traduccion", "concepto": "Secuencia de tres bases en el ARNt que se aparean con el codón complementario del ARNm." },
+    { "id": "ViaMetabolica", "label": "4. Vía metabólica", "group": "fundamentales", "concepto": "Serie de reacciones químicas enzimáticas consecutivas que transforman un sustrato en un producto." },
+    { "id": "AlfabetoMolecular", "label": "8. Alfabeto molecular", "group": "estructurales", "concepto": "Conjunto limitado de símbolos (letras) que representan los bloques de construcción de la vida (A, T, C, G)." },
+    { "id": "PCR", "label": "42. PCR", "group": "tecnicas", "concepto": "Reacción en Cadena de la Polimerasa; técnica para amplificar millones de copias de un fragmento de ADN." },
+    { "id": "Cebador", "label": "43. Cebador/Primer", "group": "tecnicas", "concepto": "Oligonucleótido corto que sirve como punto de inicio para la síntesis de ADN en la PCR." },
+    { "id": "Desnaturalizacion", "label": "44. Desnaturalización", "group": "tecnicas", "concepto": "Separación de las dos hebras de ADN mediante calor para exponer las secuencias." },
+    { "id": "Alineamiento", "label": "45. Alineamiento/Priming", "group": "tecnicas", "concepto": "Unión específica de los cebadores a las secuencias complementarias del ADN molde." },
+    { "id": "Extension", "label": "46. Extensión", "group": "tecnicas", "concepto": "Síntesis de nueva hebra de ADN por la ADN polimerasa a partir del cebador." },
+    { "id": "ClonacionMolecular", "label": "47. Clonación molecular", "group": "tecnicas", "concepto": "Técnica para insertar un fragmento de ADN en un vector para su replicación en un huésped." },
+    { "id": "Vector", "label": "48. Vector de clonación", "group": "tecnicas", "concepto": "Molécula de ADN (usualmente un plásmido) usada para transportar un gen foráneo." },
+    { "id": "BibliotecaClones", "label": "49. Biblioteca de clones", "group": "tecnicas", "concepto": "Colección de células que portan diferentes fragmentos de ADN, representando un genoma completo." },
+    { "id": "EnzimaRestriccion", "label": "50. Enzima de restricción", "group": "tecnicas", "concepto": "Proteína que corta el ADN en secuencias específicas (tijeras moleculares)." },
+    { "id": "SitioReconocimiento", "label": "51. Sitio de reconocimiento", "group": "tecnicas", "concepto": "Secuencia de ADN específica donde una enzima de restricción corta." },
+    { "id": "ExtremosRomos", "label": "52. Extremos romos", "group": "tecnicas", "concepto": "Cortes de ADN que terminan al mismo nivel, sin bases sobresalientes." },
+    { "id": "ExtremosPegajosos", "label": "53. Extremos pegajosos", "group": "tecnicas", "concepto": "Cortes de ADN dejan cadenas simples sobresalientes que facilitan la unión con otros fragmentos." },
+    { "id": "Hibridacion", "label": "54. Hibridación", "group": "tecnicas", "concepto": "Apareamiento de hebras de ADN o ARN complementarias para formar una molécula híbrida." },
+    { "id": "Ligacion", "label": "55. Ligación", "group": "tecnicas", "concepto": "Unión enzimática de dos fragmentos de ADN mediante enlaces fosfodiéster." },
+    { "id": "Electroforesis", "label": "56. Electroforesis en gel", "group": "tecnicas", "concepto": "Técnica para separar moléculas (ADN, proteínas) según su tamaño y carga mediante un campo eléctrico." },
+    { "id": "Sonda", "label": "57. Sonda", "group": "tecnicas", "concepto": "Fragmento de ADN o ARN marcado (radioactivo o fluorescente) usado para detectar secuencias complementarias." },
+    { "id": "Microarreglo", "label": "58. Microarreglo", "group": "tecnicas", "concepto": "Placa con miles de sondas fijas usada para medir la expresión de muchos genes a la vez." },
+    { "id": "VariacionGenetica", "label": "59. Variación genética", "group": "genomica", "concepto": "Diferencias en las secuencias de ADN entre individuos de una misma especie." },
+    { "id": "GenomaReferencia", "label": "60. Genoma de referencia", "group": "genomica", "concepto": "Secuencia genómica representativa de una especie usada como estándar para comparaciones." },
+    { "id": "Conservacion", "label": "61. Conservación genética", "group": "genomica", "concepto": "Preservación de secuencias de ADN similares entre diferentes especies a lo largo de la evolución." },
+    { "id": "Evolucion", "label": "62. Evolución", "group": "genomica", "concepto": "Cambio en las características heredables de las poblaciones biológicas a lo largo de las generaciones." },
+    { "id": "SeleccionNatural", "label": "63. Selección natural", "group": "genomica", "concepto": "Proceso por el cual los organismos mejor adaptados tienden a sobrevivir y reproducirse más." },
+    { "id": "Adaptacion", "label": "64. Adaptación", "group": "genomica", "concepto": "Rasgo heredable que mejora la supervivencia y reproducción de un organismo en su ambiente." },
+    { "id": "Especiacion", "label": "65. Especiación", "group": "genomica", "concepto": "Formación de una nueva especie biológica a partir de una existente." },
+    { "id": "GenomicaComparativa", "label": "66. Genómica comparativa", "group": "genomica", "concepto": "Estudio de las diferencias y similitudes en los genomas de diferentes especies." },
+    { "id": "AlineamientoSecuencias", "label": "67. Alineamiento de secuencias", "group": "genomica", "concepto": "Disposición de dos o más secuencias de ADN/Proteínas para identificar regiones de similitud." },
+    { "id": "BLAST", "label": "68. BLAST", "group": "genomica", "concepto": "Herramienta bioinformática para encontrar regiones de similitud local entre secuencias biológicas." },
+    { "id": "Bioinformatica", "label": "69. Bioinformática", "group": "genomica", "concepto": "Disciplina que utiliza software y algoritmos para analizar y interpretar datos biológicos complejos." }
+  ],
+  "links": [ 
+    { "source": "TeoriaCelular", "target": "Celula", "label": "postula que" },
+    { "source": "Celula", "target": "CicloVida", "label": "pasa por" },
+    { "source": "Celula", "target": "Eucariota", "label": "se clasifica en" },
+    { "source": "Celula", "target": "Procariota", "label": "se clasifica en" },
+    { "source": "Celula", "target": "ViaMetabolica", "label": "contiene" },
+    { "source": "ADN", "target": "Nucleotido", "label": "está formado por" },
+    { "source": "ARN", "target": "Nucleotido", "label": "está formado por" },
+    { "source": "Nucleotido", "target": "Bases", "label": "contiene" },
+    { "source": "Bases", "target": "Chargaff", "label": "cumplen" },
+    { "source": "Bases", "target": "Complementariedad", "label": "permiten" },
+    { "source": "ADN", "target": "DobleHelice", "label": "forma" },
+    { "source": "DobleHelice", "target": "Complementariedad", "label": "se basa en" },
+    { "source": "Complementariedad", "target": "Chargaff", "label": "explica" },
+    { "source": "ADN", "target": "Cromosoma", "label": "se organiza en" },
+    { "source": "Cromosoma", "target": "Gen", "label": "contiene" },
+    { "source": "Gen", "target": "Exon", "label": "tiene regiones" },
+    { "source": "Gen", "target": "Intron", "label": "tiene regiones" },
+    { "source": "Eucariota", "target": "Exon", "label": "posee" },
+    { "source": "Eucariota", "target": "Intron", "label": "posee" },
+    { "source": "Procariota", "target": "Intron", "label": "carece de", "dashed": true },
+    { "source": "Gen", "target": "HerenciaMendeliana", "label": "se transmite por" },
+    { "source": "Cromosoma", "target": "Ligamiento", "label": "muestra" },
+    { "source": "Ligamiento", "target": "MapaGenetico", "label": "permite construir" },
+    { "source": "ADN", "target": "Mutacion", "label": "puede sufrir" },
+    { "source": "Gen", "target": "UnGenUnaProteina", "label": "según hipótesis produce" },
+    { "source": "UnGenUnaProteina", "target": "Proteina", "label": "codifica" },
+    { "source": "DogmaCentral", "target": "ADN", "label": "describe flujo desde" },
+    { "source": "DogmaCentral", "target": "ARN", "label": "describe flujo hacia" },
+    { "source": "DogmaCentral", "target": "Proteina", "label": "describe flujo hasta" },
+    { "source": "ADN", "target": "Replicacion", "label": "se duplica por" },
+    { "source": "Replicacion", "target": "Complementariedad", "label": "usa" },
+    { "source": "ADN", "target": "Transcripcion", "label": "se copia a" },
+    { "source": "Transcripcion", "target": "ARN", "label": "produce" },
+    { "source": "ARN", "target": "Traduccion", "label": "se decodifica en" },
+    { "source": "Traduccion", "target": "Proteina", "label": "sintetiza" },
+    { "source": "Transcripcion", "target": "ARNPolimerasa", "label": "es catalizada por" },
+    { "source": "Transcripcion", "target": "ARNm", "label": "genera" },
+    { "source": "ARNPolimerasa", "target": "ARNm", "label": "sintetiza" },
+    { "source": "ARNm", "target": "Splicing", "label": "es procesado por" },
+    { "source": "Splicing", "target": "Exon", "label": "une" },
+    { "source": "Splicing", "target": "Intron", "label": "elimina" },
+    { "source": "Eucariota", "target": "Splicing", "label": "requiere" },
+    { "source": "ARNm", "target": "Traduccion", "label": "es leído en" },
+    { "source": "Traduccion", "target": "Ribosoma", "label": "ocurre en" },
+    { "source": "Traduccion", "target": "Aminoacido", "label": "incorpora" },
+    { "source": "Ribosoma", "target": "Polipeptido", "label": "ensambla" },
+    { "source": "Aminoacido", "target": "Polipeptido", "label": "forma" },
+    { "source": "Polipeptido", "target": "Proteina", "label": "se pliega en" },
+    { "source": "ARNm", "target": "Codon", "label": "se lee en" },
+    { "source": "Codon", "target": "CodigoGenetico", "label": "está definido por" },
+    { "source": "CodigoGenetico", "target": "Aminoacido", "label": "especifica" },
+    { "source": "CodigoGenetico", "target": "Degeneracion", "label": "presenta" },
+    { "source": "CodigoGenetico", "target": "CodonInicio", "label": "incluye" },
+    { "source": "CodigoGenetico", "target": "CodonTerminacion", "label": "incluye" },
+    { "source": "Traduccion", "target": "ARNt", "label": "requiere" },
+    { "source": "ARNt", "target": "Anticodon", "label": "porta" },
+    { "source": "ARNt", "target": "Aminoacido", "label": "transporta" },
+    { "source": "Anticodon", "target": "Codon", "label": "reconoce" },
+    { "source": "Complementariedad", "target": "Anticodon", "label": "permite" },
+    { "source": "ADN", "target": "AlfabetoMolecular", "label": "se representa como" },
+    { "source": "ARN", "target": "AlfabetoMolecular", "label": "se representa como" },
+    { "source": "Proteina", "target": "AlfabetoMolecular", "label": "se representa como" },
+    { "source": "PCR", "target": "ADN", "label": "amplifica" },
+    { "source": "PCR", "target": "Cebador", "label": "usa" },
+    { "source": "PCR", "target": "Desnaturalizacion", "label": "incluye fase" },
+    { "source": "PCR", "target": "Alineamiento", "label": "incluye fase" },
+    { "source": "PCR", "target": "Extension", "label": "incluye fase" },
+    { "source": "Desnaturalizacion", "target": "DobleHelice", "label": "separa" },
+    { "source": "Alineamiento", "target": "Cebador", "label": "posiciona" },
+    { "source": "Alineamiento", "target": "Complementariedad", "label": "usa" },
+    { "source": "Extension", "target": "Replicacion", "label": "replica mediante" },
+    { "source": "Cebador", "target": "Hibridacion", "label": "se une por" },
+    { "source": "ClonacionMolecular", "target": "ADN", "label": "inserta" },
+    { "source": "ClonacionMolecular", "target": "Vector", "label": "utiliza" },
+    { "source": "Vector", "target": "BibliotecaClones", "label": "genera" },
+    { "source": "ADN", "target": "EnzimaRestriccion", "label": "se corta con" },
+    { "source": "EnzimaRestriccion", "target": "SitioReconocimiento", "label": "reconoce" },
+    { "source": "EnzimaRestriccion", "target": "ExtremosRomos", "label": "puede generar" },
+    { "source": "EnzimaRestriccion", "target": "ExtremosPegajosos", "label": "puede generar" },
+    { "source": "ExtremosPegajosos", "target": "Hibridacion", "label": "facilitan" },
+    { "source": "Hibridacion", "target": "Complementariedad", "label": "se basa en" },
+    { "source": "ClonacionMolecular", "target": "Ligacion", "label": "requiere" },
+    { "source": "Ligacion", "target": "ADN", "label": "sella" },
+    { "source": "Electroforesis", "target": "ADN", "label": "separa fragmentos de" },
+    { "source": "Sonda", "target": "Hibridacion", "label": "detecta por" },
+    { "source": "Sonda", "target": "Complementariedad", "label": "usa" },
+    { "source": "Microarreglo", "target": "Sonda", "label": "contiene múltiples" },
+    { "source": "Microarreglo", "target": "ARNm", "label": "detecta" },
+    { "source": "Microarreglo", "target": "Hibridacion", "label": "funciona por" },
+    { "source": "ADN", "target": "VariacionGenetica", "label": "presenta" },
+    { "source": "VariacionGenetica", "target": "GenomaReferencia", "label": "se compara con" },
+    { "source": "VariacionGenetica", "target": "Evolucion", "label": "impulsa" },
+    { "source": "Mutacion", "target": "VariacionGenetica", "label": "genera" },
+    { "source": "Gen", "target": "Conservacion", "label": "muestra" },
+    { "source": "Evolucion", "target": "Conservacion", "label": "preserva por" },
+    { "source": "Evolucion", "target": "SeleccionNatural", "label": "ocurre por" },
+    { "source": "SeleccionNatural", "target": "Adaptacion", "label": "produce" },
+    { "source": "Evolucion", "target": "Especiacion", "label": "puede llevar a" },
+    { "source": "Bioinformatica", "target": "GenomicaComparativa", "label": "permite" },
+    { "source": "Bioinformatica", "target": "AlineamientoSecuencias", "label": "utiliza" },
+    { "source": "Bioinformatica", "target": "BLAST", "label": "implementa" },
+    { "source": "GenomicaComparativa", "target": "AlineamientoSecuencias", "label": "requiere" },
+    { "source": "AlineamientoSecuencias", "target": "BLAST", "label": "ejecuta" },
+    { "source": "AlineamientoSecuencias", "target": "Conservacion", "label": "identifica" },
+    { "source": "BLAST", "target": "Conservacion", "label": "detecta" },
+    { "source": "Bioinformatica", "target": "AlfabetoMolecular", "label": "procesa" },
+    { "source": "AlineamientoSecuencias", "target": "ADN", "label": "compara" },
+    { "source": "AlineamientoSecuencias", "target": "Proteina", "label": "compara" },
+    { "source": "ViaMetabolica", "target": "Proteina", "label": "es catalizada por" },
+    { "source": "Gen", "target": "Transcripcion", "label": "es expresado por" },
+    { "source": "Proteina", "target": "ViaMetabolica", "label": "ejecuta" }
+  ]
+}; 
+
+// --- 2. CONFIGURACIÓN ---
+const groupColors = {
+  fundamentales: { fill: "#e1f5ff", stroke: "#0277bd" },
+  estructurales: { fill: "#fff3e0", stroke: "#ef6c00" },
+  procesos:      { fill: "#f3e5f5", stroke: "#6a1b9a" },
+  tecnicas:      { fill: "#e8f5e9", stroke: "#2e7d32" },
+  genomica:      { fill: "#fce4ec", stroke: "#c2185b" },
+  traduccion:    { fill: "#fff9c4", stroke: "#f9a825" }
+};
+
+const getColor = (group) => groupColors[group] || { fill: "#e3f2fd", stroke: "#1976d2" };
+
+// --- 3. SETUP SVG ---
+const container = document.getElementById("graph-container");
+const width = container.clientWidth;
+const height = container.clientHeight;
+
+const svg = d3.select("#graph-container")
+  .append("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+// Definir marcadores de flecha
+const defs = svg.append("defs");
+
+// Filtro de brillo
+defs.append("filter")
+    .attr("id", "glow")
+    .attr("x", "-50%")
+    .attr("y", "-50%")
+    .attr("width", "200%")
+    .attr("height", "200%")
+  .append("feGaussianBlur")
+    .attr("stdDeviation", "3")
+    .attr("result", "coloredBlur");
+
+const feMerge = defs.select("#glow").append("feMerge");
+feMerge.append("feMergeNode").attr("in", "coloredBlur");
+feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
+// Flecha normal
+defs.append("marker")
+    .attr("id", "arrow-normal")
+    .attr("viewBox", "0 -5 10 10")
+    .attr("refX", 20)
+    .attr("refY", 0)
+    .attr("markerWidth", 6)
+    .attr("markerHeight", 6)
+    .attr("orient", "auto")
+  .append("path")
+    .attr("d", "M0,-5L10,0L0,5")
+    .attr("fill", "#999");
+
+// Flecha seleccionada
+defs.append("marker")
+    .attr("id", "arrow-selected")
+    .attr("viewBox", "0 -5 10 10")
+    .attr("refX", 20)
+    .attr("refY", 0)
+    .attr("markerWidth", 8)
+    .attr("markerHeight", 8)
+    .attr("orient", "auto")
+  .append("path")
+    .attr("d", "M0,-5L10,0L0,5")
+    .attr("fill", "#e53e3e")
+    .style("filter", "url(#glow)");
+
+// Grupo principal
+const g = svg.append("g");
+const tooltip = d3.select("#tooltip");
+const selectionIndicator = d3.select("#selection-indicator");
+
+// --- 4. CALCULAR TAMAÑOS DE NODOS SEGÚN CONEXIONES ---
+const nodeConnections = {};
+graph.nodes.forEach(n => nodeConnections[n.id] = 0);
+graph.links.forEach(l => {
+  nodeConnections[l.source] = (nodeConnections[l.source] || 0) + 1;
+  nodeConnections[l.target] = (nodeConnections[l.target] || 0) + 1;
+});
+
+const maxConnections = Math.max(...Object.values(nodeConnections), 1);
+const getNodeRadius = (nodeId) => {
+  const connections = nodeConnections[nodeId] || 0;
+  return 8 + (connections / maxConnections) * 8; // Entre 8 y 16
+};
+
+// --- 5. NAVEGACIÓN Y ZOOM ---
+let currentTransform = d3.zoomIdentity;
+let isDragging = false;
+
+const zoom = d3.zoom()
+  .scaleExtent([0.1, 4])
+  .on("zoom", (event) => {
+    if (!isDragging) {
+      currentTransform = event.transform;
+      g.attr("transform", currentTransform);
+      updateMinimap();
+    }
+  });
+
+svg.call(zoom);
+
+// Permitir arrastre del fondo
+svg.on("mousedown", function(event) {
+  if (event.target === this || event.target.tagName === 'svg') {
+    isDragging = true;
+    container.classList.add('grabbing');
+  }
+});
+
+svg.on("mouseup", () => {
+  isDragging = false;
+  container.classList.remove('grabbing');
+});
+
+// Funciones de navegación
+function adjustZoom(factor) {
+  currentTransform = currentTransform.scale(factor);
+  g.transition()
+    .duration(300)
+    .attr("transform", currentTransform);
+  updateMinimap();
+}
+
+function resetView() {
+  currentTransform = d3.zoomIdentity;
+  g.transition()
+    .duration(500)
+    .attr("transform", currentTransform);
+  updateMinimap();
+}
+
+function fitToScreen() {
+  const bounds = g.node().getBBox();
+  const fullWidth = bounds.width;
+  const fullHeight = bounds.height;
+  const midX = bounds.x + fullWidth / 2;
+  const midY = bounds.y + fullHeight / 2;
+  
+  const scale = 0.9 / Math.max(fullWidth / width, fullHeight / height);
+  const translate = [width / 2 - scale * midX, height / 2 - scale * midY];
+  
+  currentTransform = d3.zoomIdentity
+    .translate(translate[0], translate[1])
+    .scale(scale);
+  
+  g.transition()
+    .duration(750)
+    .attr("transform", currentTransform);
+  updateMinimap();
+}
+
+// --- 6. SIMULACIÓN ---
+const simulation = d3.forceSimulation(graph.nodes)
+  .force("link", d3.forceLink(graph.links).id(d => d.id).distance(120))
+  .force("charge", d3.forceManyBody().strength(-500))
+  .force("center", d3.forceCenter(width / 2, height / 2))
+  .force("collide", d3.forceCollide().radius(d => getNodeRadius(d.id) + 15));
+
+let selectedLink = null;
+let pinnedNodes = new Set();
+
+// --- 7. DIBUJAR ENLACES ---
+// Primero dibujamos el área de click invisible (más gruesa)
+const linkHitArea = g.append("g")
+  .selectAll("line")
+  .data(graph.links)
+  .enter()
+  .append("line")
+  .attr("class", "link-hitarea")
+  .on("click", function(event, d) {
+    event.stopPropagation();
+    selectedLink = (selectedLink === d) ? null : d;
+    updateSelection();
+  })
+  .on("mouseover", function(event, d) {
+    d3.select(this.parentNode)
+      .select(`line.link[data-id="${d.source.id}-${d.target.id}"]`)
+      .attr("stroke-opacity", 0.9);
+  })
+  .on("mouseout", function(event, d) {
+    if (selectedLink !== d) {
+      d3.select(this.parentNode)
+        .select(`line.link[data-id="${d.source.id}-${d.target.id}"]`)
+        .attr("stroke-opacity", 0.5);
+    }
+  });
+
+// Luego la línea visible
+const link = g.append("g")
+  .selectAll("line")
+  .data(graph.links)
+  .enter()
+  .append("line")
+  .attr("class", "link")
+  .attr("data-id", d => `${d.source.id}-${d.target.id}`)
+  .attr("stroke", "#999")
+  .attr("stroke-width", 2)
+  .attr("stroke-opacity", 0.5)
+  .attr("marker-end", "url(#arrow-normal)")
+  .style("pointer-events", "none"); // El click lo maneja el hitarea
+
+// Textos de enlaces
+const linkText = g.append("g")
+  .selectAll("text")
+  .data(graph.links)
+  .enter()
+  .append("text")
+  .attr("class", "link-label")
+  .text(d => d.label || "");
+
+// --- 8. DIBUJAR NODOS ---
+const node = g.append("g")
+  .selectAll("circle")
+  .data(graph.nodes)
+  .enter()
+  .append("circle")
+  .attr("class", "node")
+  .attr("r", d => getNodeRadius(d.id))
+  .attr("fill", d => getColor(d.group).fill)
+  .attr("stroke", d => getColor(d.group).stroke)
+  .attr("stroke-width", 2)
+  .on("dblclick", function(event, d) {
+    event.stopPropagation();
+    centerOnNode(d);
+  })
+  .on("contextmenu", function(event, d) {
+    event.preventDefault();
+    togglePin(d);
+  })
+  .call(d3.drag()
+      .on("start", dragstarted)
+      .on("drag", dragged)
+      .on("end", dragended));
+
+// Etiquetas de nodos
+const label = g.append("g")
+  .selectAll("text")
+  .data(graph.nodes)
+  .enter()
+  .append("text")
+  .attr("class", "node-label")
+  .text(d => d.label || d.id)
+  .attr("dx", d => getNodeRadius(d.id) + 4)
+  .attr("dy", 4);
+
+// Iconos de pin para nodos fijados
+const pinIcon = g.append("g")
+  .selectAll("text")
+  .data(graph.nodes)
+  .enter()
+  .append("text")
+  .attr("class", "pin-icon")
+  .text("📌")
+  .style("opacity", 0);
+
+// --- 9. TOOLTIPS ---
+node.on("mouseover", (event, d) => {
+    const colors = getColor(d.group);
+    const connections = nodeConnections[d.id] || 0;
+    tooltip
+      .style("opacity", 1)
+      .style("border-left-color", colors.stroke)
+      .html(`
+        <b>${d.label || d.id}</b><br/>
+        ${d.concepto || "Concepto del mapa"}<br/>
+        <small style="color: #718096;">Conexiones: ${connections}</small>
+      `)
+      .style("left", (event.pageX + 15) + "px")
+      .style("top", (event.pageY + 15) + "px");
+    
+    d3.select(event.currentTarget)
+      .transition()
+      .duration(200)
+      .attr("r", getNodeRadius(d.id) * 1.3);
+})
+.on("mousemove", (event) => {
+    tooltip
+      .style("left", (event.pageX + 15) + "px")
+      .style("top", (event.pageY + 15) + "px");
+})
+.on("mouseout", (event, d) => {
+    tooltip.style("opacity", 0);
+    d3.select(event.currentTarget)
+      .transition()
+      .duration(200)
+      .attr("r", getNodeRadius(d.id));
+});
+
+// --- 10. FUNCIONES DE UTILIDAD ---
+function updateSelection() {
+  const isSelected = (d) => d === selectedLink;
+  
+  link
+    .attr("stroke", d => isSelected(d) ? "#e53e3e" : "#999")
+    .attr("stroke-width", d => isSelected(d) ? 4 : 2)
+    .attr("stroke-opacity", d => isSelected(d) ? 1 : 0.5)
+    .attr("marker-end", d => isSelected(d) ? "url(#arrow-selected)" : "url(#arrow-normal)")
+    .classed("selected", d => isSelected(d))
+    .style("filter", d => isSelected(d) ? "url(#glow)" : "none");
+  
+  linkText.classed("selected", d => isSelected(d));
+  
+  if (selectedLink) {
+    const source = selectedLink.source.label || selectedLink.source.id;
+    const target = selectedLink.target.label || selectedLink.target.id;
+    selectionIndicator
+      .classed("visible", true)
+      .text(`✨ "${selectedLink.label || 'Relación'}" (${source} → ${target})`);
+  } else {
+    selectionIndicator.classed("visible", false);
+  }
+}
+
+function clearSelection() {
+  selectedLink = null;
+  updateSelection();
+}
+
+function centerOnNode(d) {
+  const scale = 1.5;
+  const translate = [
+    width / 2 - scale * d.x,
+    height / 2 - scale * d.y
+  ];
+  
+  currentTransform = d3.zoomIdentity
+    .translate(translate[0], translate[1])
+    .scale(scale);
+  
+  g.transition()
+    .duration(750)
+    .attr("transform", currentTransform);
+  
+  updateMinimap();
+}
+
+function togglePin(d) {
+  if (pinnedNodes.has(d.id)) {
+    pinnedNodes.delete(d.id);
+    d.fx = null;
+    d.fy = null;
+  } else {
+    pinnedNodes.add(d.id);
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+  updatePins();
+}
+
+function updatePins() {
+  node.classed("pinned", d => pinnedNodes.has(d.id));
+  pinIcon.style("opacity", d => pinnedNodes.has(d.id) ? 1 : 0);
+}
+
+function autoOrganize() {
+  // Reiniciar la simulación con más fuerza
+  simulation.alpha(1).restart();
+  
+  // Desanclar todos los nodos
+  pinnedNodes.clear();
+  graph.nodes.forEach(n => {
+    n.fx = null;
+    n.fy = null;
+  });
+  updatePins();
+}
+
+// --- 11. BUSCADOR ---
+const searchInput = document.getElementById("searchInput");
+const searchResults = document.getElementById("searchResults");
+
+searchInput.addEventListener("input", function() {
+  const query = this.value.toLowerCase().trim();
+  
+  if (query.length < 2) {
+    searchResults.classList.remove("visible");
+    return;
+  }
+  
+  const matches = graph.nodes.filter(n => 
+    (n.label || n.id).toLowerCase().includes(query) ||
+    (n.concepto || "").toLowerCase().includes(query)
+  ).slice(0, 10);
+  
+  if (matches.length > 0) {
+    searchResults.innerHTML = matches.map(n => `
+      <div class="search-result-item" data-id="${n.id}">
+        <strong>${n.label || n.id}</strong>
+        ${n.concepto ? `<br/><small style="color: #718096;">${n.concepto.substring(0, 50)}...</small>` : ''}
+      </div>
+    `).join('');
+    
+    searchResults.classList.add("visible");
+    
+    // Click en resultado
+    searchResults.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const nodeId = this.dataset.id;
+        const node = graph.nodes.find(n => n.id === nodeId);
+        if (node) {
+          centerOnNode(node);
+          searchInput.value = '';
+          searchResults.classList.remove("visible");
+        }
+      });
+    });
+  } else {
+    searchResults.innerHTML = '<div class="search-result-item">No se encontraron resultados</div>';
+    searchResults.classList.add("visible");
+  }
+});
+
+// Cerrar resultados al hacer click fuera
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-container')) {
+    searchResults.classList.remove("visible");
+  }
+});
+
+
+// --- 13. MINI-MAPA ---
+const minimapSvg = d3.select("#minimap");
+const minimapG = minimapSvg.append("g");
+const minimapScale = 0.15;
+
+// Dibujar elementos en el minimapa
+const minimapNodes = minimapG.append("g")
+  .selectAll("circle")
+  .data(graph.nodes)
+  .enter()
+  .append("circle")
+  .attr("r", 2)
+  .attr("fill", d => getColor(d.group).stroke);
+
+const minimapLinks = minimapG.append("g")
+  .selectAll("line")
+  .data(graph.links)
+  .enter()
+  .append("line")
+  .attr("stroke", "#999")
+  .attr("stroke-width", 0.5);
+
+const minimapViewport = minimapSvg.append("rect")
+  .attr("class", "minimap-viewport");
+
+// Actualizar minimapa
+function updateMinimap() {
+  const k = currentTransform.k;
+  const x = -currentTransform.x / k;
+  const y = -currentTransform.y / k;
+  
+  minimapViewport
+    .attr("x", x * minimapScale)
+    .attr("y", y * minimapScale)
+    .attr("width", (width / k) * minimapScale)
+    .attr("height", (height / k) * minimapScale);
+}
+
+// Interacción con minimapa
+minimapViewport.call(d3.drag()
+  .on("drag", function(event) {
+    const x = event.x / minimapScale;
+    const y = event.y / minimapScale;
+    
+    currentTransform = d3.zoomIdentity
+      .translate(-x * currentTransform.k, -y * currentTransform.k)
+      .scale(currentTransform.k);
+    
+    g.attr("transform", currentTransform);
+    updateMinimap();
+  })
+);
+
+// --- 14. SIMULACIÓN TICK ---
+simulation.on("tick", () => {
+  link
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y);
+
+  linkHitArea
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y);
+
+  linkText
+    .attr("x", d => (d.source.x + d.target.x) / 2)
+    .attr("y", d => (d.source.y + d.target.y) / 2);
+
+  node
+    .attr("cx", d => d.x)
+    .attr("cy", d => d.y);
+
+  label
+    .attr("x", d => d.x)
+    .attr("y", d => d.y);
+
+  pinIcon
+    .attr("x", d => d.x - 5)
+    .attr("y", d => d.y - getNodeRadius(d.id) - 5);
+
+  // Actualizar minimapa
+  minimapNodes
+    .attr("cx", d => d.x * minimapScale)
+    .attr("cy", d => d.y * minimapScale);
+
+  minimapLinks
+    .attr("x1", d => d.source.x * minimapScale)
+    .attr("y1", d => d.source.y * minimapScale)
+    .attr("x2", d => d.target.x * minimapScale)
+    .attr("y2", d => d.target.y * minimapScale);
+});
+
+// --- 15. ARRASTRE DE NODOS ---
+function dragstarted(event, d) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(event, d) {
+  d.fx = event.x;
+  d.fy = event.y;
+}
+
+function dragended(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  if (!pinnedNodes.has(d.id)) {
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+// Click en SVG para deseleccionar
+svg.on("click", function(event) {
+  if (event.target === this || event.target.tagName === 'svg') {
+    clearSelection();
+  }
+});
+
+// Mensaje inicial si no hay datos
+if (graph.nodes.length === 0) {
+  g.append("text")
+    .attr("x", width / 2)
+    .attr("y", height / 2)
+    .attr("text-anchor", "middle")
+    .attr("font-size", "18px")
+    .attr("fill", "#e53e3e")
+    .attr("font-weight", "bold")
+    .text("⚠️ No hay datos. Pega tu JSON en la línea 481");
+  
+  g.append("text")
+    .attr("x", width / 2)
+    .attr("y", height / 2 + 30)
+    .attr("text-anchor", "middle")
+    .attr("font-size", "14px")
+    .attr("fill", "#4a5568")
+    .text('Busca: const graph = { "nodes": [], "links": [] };');
+}
+
+</script>
+</body>
+</html>

@@ -64,7 +64,7 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
     if (messages.length === 0) {
       setMessages([{
         role: 'assistant',
-        content: `Hola. Soy **GenomicAI**, tu asistente bioinformático experto.\n\nEstoy conectado a **NCBI GenBank** y tengo acceso completo al análisis del genoma activo (*${currentGenome || 'Ninguno seleccionado'}*).\n\nPuedes preguntarme sobre:\n- Interpretación biológica de los datos\n- Funciones de genes específicos\n- Comparaciones evolutivas\n- Referencias bibliográficas`
+        content: `Hola. Soy **GenomicAI**, tu asistente bioinformático experto.\n\nEstoy conectado a **NCBI GenBank** y tengo acceso completo al análisis del genoma activo (*${currentGenome?.accession || 'Ninguno seleccionado'}*).\n\nPuedes preguntarme sobre:\n- Interpretación biológica de los datos\n- Funciones de genes específicos\n- Comparaciones evolutivas\n- Referencias bibliográficas`
       }])
     }
   }, [currentGenome])
@@ -141,7 +141,7 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Dr. GenomicAI</h3>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">
-                {currentGenome ? `Contexto: ${currentGenome}` : 'Esperando Genoma'}
+                {currentGenome ? `Contexto: ${currentGenome.accession || currentGenome}` : 'Esperando Genoma'}
               </span>
             </div>
           </div>

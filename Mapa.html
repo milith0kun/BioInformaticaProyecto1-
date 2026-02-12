@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Conceptual Lineal - Biología Molecular (69 Términos)</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            background: #34495e;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .controls button {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        }
+        
+        .controls button:active {
+            transform: translateY(0);
+        }
+        
+        .zoom-info {
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+        }
+        
+        .instructions {
+            background: #ecf0f1;
+            padding: 20px;
+            border-left: 5px solid #3498db;
+            margin: 20px;
+            border-radius: 10px;
+        }
+        
+        .instructions h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ul {
+            margin-left: 20px;
+            color: #34495e;
+        }
+        
+        .instructions li {
+            margin: 8px 0;
+        }
+        
+        .diagram-wrapper {
+            position: relative;
+            width: 100%;
+            height: 800px;
+            overflow: auto;
+            background: #fafafa;
+            border: 2px solid #ddd;
+        }
+        
+        .diagram-container {
+            transform-origin: top left;
+            transition: transform 0.3s ease;
+            padding: 40px;
+            min-width: 100%;
+            display: inline-block;
+        }
+        
+        .mermaid {
+            display: flex;
+            justify-content: flex-start;
+        }
+        
+        /* Modal para las definiciones */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 0;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 600px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.8em;
+        }
+        
+        .modal-body {
+            padding: 25px;
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #2c3e50;
+        }
+        
+        .close {
+            color: white;
+            float: right;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+            transition: all 0.3s;
+        }
+        
+        .close:hover {
+            transform: scale(1.2);
+        }
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 0.9em;
+        }
+
+        /* Estilos personalizados para nodos de Mermaid */
+        .node rect,
+        .node circle,
+        .node polygon {
+            cursor: pointer !important;
+            transition: all 0.2s;
+        }
+
+        .node:hover rect,
+        .node:hover circle,
+        .node:hover polygon {
+            filter: brightness(1.1);
+            stroke-width: 3px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧬 Mapa Conceptual Lineal Interactivo</h1>
+            <p>Biología Molecular - 69 Términos Numerados y Conectados</p>
+        </div>
+        
+        <div class="controls">
+            <button onclick="zoomIn()">🔍 Acercar (+)</button>
+            <span class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</span>
+            <button onclick="zoomOut()">🔍 Alejar (-)</button>
+            <button onclick="resetZoom()">↻ Restablecer</button>
+            <button onclick="fitToScreen()">⛶ Ajustar a pantalla</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones de Uso:</h3>
+            <ul>
+                <li><strong>Haz clic en cualquier término</strong> numerado para ver su definición completa</li>
+                <li>Usa los <strong>botones de zoom</strong> para acercar/alejar el diagrama</li>
+                <li><strong>Desplázate</strong> horizontal y verticalmente en el área del diagrama</li>
+                <li>Los <strong>verbos en las flechas</strong> muestran la relación entre conceptos</li>
+            </ul>
+        </div>
+        
+        <div class="diagram-wrapper" id="diagramWrapper">
+            <div class="diagram-container" id="diagramContainer">
+                <div class="mermaid">
+flowchart LR
+%% NÚCLEO
+C1["1. Célula"] -->|sustenta| C2["2. Teoría celular"]
+C1 -->|presenta| C3["3. Ciclo de vida celular"]
+C1 -->|ejecuta| C4["4. Vía metabólica"]
+C1 -->|contiene| C5["5. ADN"]
+C1 -->|contiene| C6["6. ARN"]
+C1 -->|produce| C7["7. Proteína"]
+%% INFORMACIÓN GENÉTICA
+C5 -->|se organiza en| C9["9. Cromosoma"]
+C5 -->|incluye| C10["10. Gen"]
+C10 -->|explica| C11["11. Herencia mendeliana"]
+C5 -->|sufre| C12["12. Mutación"]
+C10 -->|presenta| C13["13. Ligamiento genético"]
+C10 -->|se ordena en| C14["14. Mapa genético"]
+C10 -->|se asocia con| C15["15. Un gen–una proteína"]
+%% ESTRUCTURA MOLECULAR
+C5 -->|está formado por| C16["16. Nucleótido"]
+C16 -->|incluye| C17["17. Bases nitrogenadas"]
+C5 -->|obedece| C18["18. Regla de Chargaff"]
+C5 -->|adopta| C19["19. Doble hélice"]
+C5 -->|usa| C20["20. Complementariedad de bases"]
+C5 -->|se copia por| C21["21. Replicación del ADN"]
+%% TIPOS CELULARES
+C1 -->|puede ser| C22["22. Célula eucariota"]
+C1 -->|puede ser| C23["23. Célula procariota"]
+%% EXPRESIÓN GÉNICA
+C10 -->|se transcribe mediante| C26["26. Transcripción"]
+C26 -->|es catalizada por| C27["27. ARN polimerasa"]
+C26 -->|produce| C28["28. ARN mensajero"]
+C28 -->|es modificado por| C29["29. Splicing"]
+C28 -->|contiene| C24["24. Exón"]
+C28 -->|elimina| C25["25. Intrón"]
+%% TRADUCCIÓN
+C28 -->|se traduce por| C30["30. Traducción"]
+C30 -->|es realizada por| C31["31. Ribosoma"]
+C30 -->|usa| C32["32. Aminoácido"]
+C32 -->|forma| C33["33. Polipéptido"]
+C30 -->|produce| C7
+%% CÓDIGO GENÉTICO
+C28 -->|se lee en| C34["34. Codón"]
+C34 -->|pertenece al| C35["35. Código genético"]
+C35 -->|presenta| C36["36. Degeneración del código genético"]
+C34 -->|puede ser| C37["37. Codón de inicio"]
+C34 -->|puede ser| C38["38. Codón de terminación"]
+C30 -->|requiere| C39["39. ARNt"]
+C39 -->|usa| C40["40. Anticodón"]
+%% MARCO CONCEPTUAL
+C5 -->|fluye según| C41["41. Dogma central"]
+C6 -->|fluye según| C41
+C7 -->|fluye según| C41
+C5 -->|se representa en| C8["8. Alfabeto molecular"]
+C6 -->|se representa en| C8
+C7 -->|se representa en| C8
+%% TÉCNICAS MOLECULARES
+C5 -->|se amplifica por| C42["42. PCR"]
+C42 -->|requiere| C43["43. Cebador"]
+C42 -->|incluye| C44["44. Desnaturalización"]
+C42 -->|incluye| C45["45. Alineamiento"]
+C42 -->|incluye| C46["46. Extensión"]
+C5 -->|se inserta mediante| C47["47. Clonación molecular"]
+C47 -->|utiliza| C48["48. Vector de clonación"]
+C47 -->|genera| C49["49. Biblioteca de clones"]
+C5 -->|es cortado por| C50["50. Enzima de restricción"]
+C50 -->|reconoce| C51["51. Sitio de reconocimiento"]
+C50 -->|produce| C52["52. Extremos romos"]
+C50 -->|produce| C53["53. Extremos pegajosos"]
+C5 -->|se une por| C54["54. Hibridación"]
+C5 -->|se sella por| C55["55. Ligación"]
+C5 -->|se separa por| C56["56. Electroforesis en gel"]
+C5 -->|se detecta con| C57["57. Sonda"]
+C10 -->|se analiza con| C58["58. Microarreglo"]
+%% VARIACIÓN Y EVOLUCIÓN
+C5 -->|presenta| C59["59. Variación genética intraespecífica"]
+C5 -->|se compara con| C60["60. Genoma de referencia"]
+C59 -->|contribuye a| C61["61. Conservación genética"]
+C61 -->|evidencia| C62["62. Evolución"]
+C62 -->|opera por| C63["63. Selección natural"]
+C63 -->|favorece| C64["64. Adaptación"]
+C64 -->|origina| C65["65. Especiación"]
+%% ANÁLISIS COMPUTACIONAL
+C5 -->|se estudia con| C66["66. Genómica comparativa"]
+C5 -->|se compara mediante| C67["67. Alineamiento de secuencias"]
+C67 -->|se implementa en| C68["68. BLAST"]
+C66 -->|se apoya en| C69["69. Bioinformática"]
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            © 2025 Mapa Conceptual de Biología Molecular | 69 Términos Numerados e Interconectados
+        </div>
+    </div>
+    
+    <!-- Modal para definiciones -->
+    <div id="definitionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close">&times;</span>
+                <h2 id="modalTitle">Término</h2>
+            </div>
+            <div class="modal-body">
+                <p id="modalDefinition">Definición</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Diccionario de definiciones
+        const definiciones = {
+            "1. Célula": "Unidad estructural y funcional básica de los organismos, compuesta por componentes que permiten metabolismo, replicación y respuesta al entorno.",
+            "2. Teoría celular": "Postulado biológico que establece que los organismos están formados por células y que la célula es la unidad fundamental de vida.",
+            "3. Ciclo de vida celular": "Secuencia de estados por los que pasa una célula (crecimiento, replicación/división y muerte), regulada por procesos bioquímicos.",
+            "4. Vía metabólica": "Red organizada de reacciones químicas catalizadas que sintetizan, degradan o señalizan procesos dentro de la célula.",
+            "5. ADN": "Polímero de nucleótidos con bases A, T, G y C; normalmente bicatenario y químicamente estable; almacena información hereditaria.",
+            "6. ARN": "Polímero de nucleótidos con bases A, U, G y C; usualmente monocatenario y más reactivo; participa en transferencia y procesamiento de información genética y en funciones catalíticas/regulatorias.",
+            "7. Proteína": "Macromolécula formada por una o más cadenas polipeptídicas de aminoácidos; ejecuta funciones celulares (catálisis, estructura, transporte, señalización, regulación).",
+            "8. Alfabeto molecular": "Representación secuencial de macromoléculas como \"cadenas\" (ADN/ARN: 4 letras; proteínas: 20 letras), base conceptual para análisis computacional de secuencias.",
+            "9. Cromosoma": "Estructura que organiza y empaqueta ADN (y proteínas asociadas) y contiene genes; su número varía entre especies.",
+            "10. Gen": "Segmento de ADN que contiene la información necesaria para producir un producto funcional (ARN o proteína) bajo un contexto regulatorio.",
+            "11. Herencia mendeliana": "Transmisión de rasgos mediante unidades discretas (genes) que segregan y se combinan según reglas observables en la descendencia.",
+            "12. Mutación": "Cambio en la secuencia de ADN (p. ej., sustitución de base) que puede alterar un rasgo o función biológica.",
+            "13. Ligamiento genético": "Tendencia de genes cercanos en un cromosoma a heredarse juntos, debido a menor probabilidad de recombinación entre ellos.",
+            "14. Mapa genético": "Ordenamiento relativo de genes en un cromosoma estimado a partir de frecuencias de recombinación (distancia genética).",
+            "15. Un gen–una proteína": "Hipótesis histórica que asocia cada gen con la producción de una proteína; hoy se reconoce que un gen puede originar múltiples productos (p. ej., por splicing alternativo).",
+            "16. Nucleótido": "Unidad básica de ADN/ARN compuesta por una base nitrogenada, un azúcar y un grupo fosfato.",
+            "17. Bases nitrogenadas": "A (adenina), T (timina, solo ADN), U (uracilo, solo ARN), G (guanina), C (citosina).",
+            "18. Regla de Chargaff": "Observación de que en ADN bicatenario la cantidad de A≈T y G≈C, consistente con apareamiento complementario.",
+            "19. Doble hélice": "Estructura del ADN formada por dos hebras antiparalelas enrolladas, unidas por puentes de hidrógeno entre pares de bases.",
+            "20. Complementariedad de bases": "Emparejamiento específico A–T (o A–U en ARN) y C–G; permite copia fiel en replicación/transcripción e hibridación.",
+            "21. Replicación del ADN": "Proceso de copia del ADN donde cada hebra sirve como molde para sintetizar una hebra complementaria.",
+            "22. Célula eucariota": "Célula con ADN encapsulado en un núcleo; en general, genes con exones e intrones y procesamiento de ARN.",
+            "23. Célula procariota": "Célula sin núcleo; genes típicamente continuos; transcripción y traducción ocurren en el mismo compartimento.",
+            "24. Exón": "Segmento de un gen eucariota que permanece en el ARNm maduro y contribuye a la secuencia codificante.",
+            "25. Intrón": "Segmento interveniente transcrito en ARN pero eliminado durante el splicing antes de formar el ARNm maduro.",
+            "26. Transcripción": "Síntesis de ARN a partir de un molde de ADN mediante una enzima; copia información de un gen a una molécula de ARN.",
+            "27. ARN polimerasa": "Complejo enzimático que cataliza la transcripción, agregando ribonucleótidos complementarios al molde de ADN.",
+            "28. ARN mensajero": "ARN que porta la información codificante de un gen hacia el ribosoma para síntesis proteica.",
+            "29. Splicing": "Proceso eucariota de eliminación de intrones y unión de exones para generar ARNm funcional.",
+            "30. Traducción": "Proceso por el cual el ribosoma lee codones del ARNm y ensambla una proteína incorporando aminoácidos en orden.",
+            "31. Ribosoma": "Complejo ribonucleoproteico (ARN + proteínas) que cataliza la traducción y ensambla polipéptidos.",
+            "32. Aminoácido": "Monómero de las proteínas; existen 20 tipos estándar codificados por el código genético.",
+            "33. Polipéptido": "Cadena lineal de aminoácidos unida por enlaces peptídicos; puede plegarse para formar una proteína funcional.",
+            "34. Codón": "Triplete de nucleótidos en ARNm que especifica un aminoácido o una señal de inicio/terminación.",
+            "35. Código genético": "Correspondencia entre codones y aminoácidos (y señales start/stop) usada para traducir ARNm a proteína.",
+            "36. Degeneración del código genético": "Propiedad por la cual múltiples codones distintos pueden codificar el mismo aminoácido.",
+            "37. Codón de inicio": "Codón que inicia la traducción; típicamente AUG (Metionina) en el código estándar.",
+            "38. Codón de terminación": "Codón que señala el fin de la traducción; típicamente UAA, UAG o UGA.",
+            "39. ARNt": "ARN adaptador que transporta un aminoácido específico y reconoce un codón del ARNm mediante su anticodón.",
+            "40. Anticodón": "Triplete en ARNt complementario al codón del ARNm; asegura incorporación del aminoácido correcto.",
+            "41. Dogma central": "Principio que describe el flujo principal de información genética: ADN → ARN → proteína.",
+            "42. PCR": "Técnica de amplificación de un fragmento específico de ADN mediante ciclos de desnaturalización, alineamiento de cebadores y extensión por ADN polimerasa.",
+            "43. Cebador": "Oligonucleótido corto que se aparea con el molde y provee un extremo 3' para que la polimerasa inicie síntesis.",
+            "44. Desnaturalización": "Separación de hebras de ADN por calentamiento para obtener moldes monocatenarios.",
+            "45. Alineamiento": "Unión de cebadores a secuencias complementarias flanqueantes al enfriar la reacción.",
+            "46. Extensión": "Síntesis de nuevas hebras complementarias a partir de cebadores mediante ADN polimerasa.",
+            "47. Clonación molecular": "Inserción de un fragmento de ADN en un vector replicable para producir muchas copias en un organismo hospedero.",
+            "48. Vector de clonación": "Molécula de ADN (p. ej., plasmidio/virus) capaz de replicarse y transportar un inserto de ADN.",
+            "49. Biblioteca de clones": "Colección de clones que representan fragmentos (frecuentemente aleatorios) de un genoma.",
+            "50. Enzima de restricción": "Proteína que corta ADN en secuencias específicas (sitios de reconocimiento), generando fragmentos.",
+            "51. Sitio de reconocimiento": "Secuencia específica (a menudo palindrómica) donde una enzima de restricción se une y corta.",
+            "52. Extremos romos": "Resultado de un corte que deja extremos sin salientes monocatenarios.",
+            "53. Extremos pegajosos": "Extremos con salientes monocatenarios complementarios que facilitan unión por hibridación.",
+            "54. Hibridación": "Unión de hebras complementarias de ácidos nucleicos por apareamiento de bases.",
+            "55. Ligación": "Formación de enlaces covalentes para \"sellar\" el esqueleto azúcar-fosfato y unir fragmentos de ADN.",
+            "56. Electroforesis en gel": "Técnica que separa fragmentos de ADN por tamaño al migrar en un gel bajo campo eléctrico.",
+            "57. Sonda": "Oligonucleótido marcado de secuencia conocida que se une por hibridación para detectar una secuencia complementaria.",
+            "58. Microarreglo": "Superficie con muchas sondas inmovilizadas usada para detectar presencia o abundancia de transcritos (expresión génica) por hibridación.",
+            "59. Variación genética intraespecífica": "Diferencias de secuencia entre individuos de una misma especie (p. ej., cambios en un pequeño porcentaje de bases) que sustentan diversidad de rasgos.",
+            "60. Genoma de referencia": "Secuencia representativa (\"maestra\") usada como patrón para una especie, aunque individuos difieran en posiciones específicas.",
+            "61. Conservación genética": "Presencia de genes o secuencias similares entre especies, indicativa de origen común o función preservada.",
+            "62. Evolución": "Proceso de cambio heredable en poblaciones a través del tiempo, reflejado en variaciones de secuencia genómica.",
+            "63. Selección natural": "Mecanismo por el cual variantes genéticas que mejoran el éxito reproductivo tienden a aumentar su frecuencia.",
+            "64. Adaptación": "Incremento de frecuencia de rasgos heredables que mejoran el ajuste de una población a su ambiente.",
+            "65. Especiación": "Formación de nuevas especies cuando poblaciones divergen hasta volverse reproductivamente incompatibles.",
+            "66. Genómica comparativa": "Análisis comparado de genomas para identificar similitudes/diferencias, inferir funciones y relaciones evolutivas.",
+            "67. Alineamiento de secuencias": "Método computacional para comparar secuencias y localizar regiones homólogas o conservadas.",
+            "68. BLAST": "Familia de algoritmos rápidos para buscar similitudes entre secuencias y evaluar su significancia estadística.",
+            "69. Bioinformática": "Disciplina que utiliza algoritmos, estadística y modelos computacionales para analizar datos biológicos (especialmente secuencias) y \"decodificar\" patrones funcionales y evolutivos."
+        };
+        
+        // Variables de zoom
+        let currentZoom = 1;
+        const zoomStep = 0.1;
+        const minZoom = 0.3;
+        const maxZoom = 3;
+        
+        // Inicializar Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+        
+        // Funciones de zoom
+        function updateZoom() {
+            const container = document.getElementById('diagramContainer');
+            container.style.transform = `scale(${currentZoom})`;
+            document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100);
+        }
+        
+        function zoomIn() {
+            if (currentZoom < maxZoom) {
+                currentZoom += zoomStep;
+                updateZoom();
+            }
+        }
+        
+        function zoomOut() {
+            if (currentZoom > minZoom) {
+                currentZoom -= zoomStep;
+                updateZoom();
+            }
+        }
+        
+        function resetZoom() {
+            currentZoom = 1;
+            updateZoom();
+            document.getElementById('diagramWrapper').scrollLeft = 0;
+            document.getElementById('diagramWrapper').scrollTop = 0;
+        }
+        
+        function fitToScreen() {
+            const wrapper = document.getElementById('diagramWrapper');
+            const container = document.getElementById('diagramContainer');
+            const scaleX = wrapper.clientWidth / container.scrollWidth;
+            const scaleY = wrapper.clientHeight / container.scrollHeight;
+            currentZoom = Math.min(scaleX, scaleY) * 0.95;
+            if (currentZoom < minZoom) currentZoom = minZoom;
+            if (currentZoom > maxZoom) currentZoom = maxZoom;
+            updateZoom();
+        }
+        
+        // Atajos de teclado para zoom
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === '+' || e.key === '=') {
+                    e.preventDefault();
+                    zoomIn();
+                } else if (e.key === '-') {
+                    e.preventDefault();
+                    zoomOut();
+                } else if (e.key === '0') {
+                    e.preventDefault();
+                    resetZoom();
+                }
+            }
+        });
+        
+        // Zoom con rueda del ratón
+        document.getElementById('diagramWrapper').addEventListener('wheel', function(e) {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    zoomIn();
+                } else {
+                    zoomOut();
+                }
+            }
+        });
+        
+        // Función para mostrar modal con definición
+        function showDefinition(term) {
+            const modal = document.getElementById('definitionModal');
+            const title = document.getElementById('modalTitle');
+            const definition = document.getElementById('modalDefinition');
+            
+            title.textContent = term;
+            definition.textContent = definiciones[term] || "Definición no disponible.";
+            modal.style.display = 'block';
+        }
+        
+        // Cerrar modal
+        document.querySelector('.close').onclick = function() {
+            document.getElementById('definitionModal').style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('definitionModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        // Agregar eventos de clic después de que Mermaid renderice
+        setTimeout(() => {
+            const nodes = document.querySelectorAll('.node');
+            nodes.forEach(node => {
+                node.style.cursor = 'pointer';
+                node.addEventListener('click', function() {
+                    const text = this.querySelector('span, p, div').textContent.trim();
+                    showDefinition(text);
+                });
+            });
+        }, 1500);
+    </script>
+</body>
+</html>
