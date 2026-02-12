@@ -8,7 +8,6 @@ import DataExport from './components/DataExport'
 import AIValidation from './components/AIValidation'
 import GenomeMultiSelector from './components/GenomeMultiSelector'
 import ComparisonResults from './components/ComparisonResults'
-import InteractiveChat from './components/InteractiveChat'
 import GenomeViewer from './components/GenomeViewer'
 import ProteinViewer from './components/ProteinViewer'
 import CodonUsageTable from './components/CodonUsageTable'
@@ -21,7 +20,7 @@ import FunctionalCategories from './components/FunctionalCategories'
 import CAIAnalysis from './components/CAIAnalysis'
 import ConceptMap from './components/ConceptMap'
 import NetworkMap from './components/NetworkMap'
-import FloatingMapButton from './components/FloatingMapButton'
+import FloatingChat from './components/FloatingChat'
 import { api } from './services/api'
 
 function App() {
@@ -287,7 +286,6 @@ function App() {
     phylo: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
     cog: "M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z",
     cai: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z",
-    chat: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
     ai: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z",
     files: "M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5z",
     export: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
@@ -344,7 +342,6 @@ function App() {
     {
       title: 'IA y Utilidades',
       items: [
-        { id: 'chat', name: 'Chat IA', description: 'Asistente inteligente' },
         { id: 'ai', name: 'Validación IA', description: 'Validación con IA' },
         { id: 'files', name: 'Archivos', description: 'Gestión de archivos' },
         { id: 'export', name: 'Exportar Datos', description: 'Exportar resultados' },
@@ -784,7 +781,6 @@ function App() {
                   {activeView === 'cai' && <CAIAnalysis />}
                   {activeView === 'concept-map' && <ConceptMap />}
                   {activeView === 'network-map' && <NetworkMap />}
-                  {activeView === 'chat' && <InteractiveChat hasAnalysis={!!analysisData} currentGenome={currentGenome} />}
                   {activeView === 'ai' && (
                     <AIValidation
                       validationData={aiValidation}
@@ -804,16 +800,9 @@ function App() {
           </div>
         </main>
 
-        <FloatingMapButton 
-          activeView={activeView}
-          onOpenConcept={() => {
-            setCurrentStep(3)
-            setActiveView('concept-map')
-          }}
-          onOpenNetwork={() => {
-            setCurrentStep(3)
-            setActiveView('network-map')
-          }}
+        <FloatingChat 
+          hasAnalysis={!!analysisData} 
+          currentGenome={currentGenome} 
         />
 
         {/* Bottom Bar */}

@@ -196,17 +196,21 @@ flowchart LR
 `;
         try {
             const id = `mermaid-id-${Math.random().toString(36).substr(2, 9)}`;
-            // Intentamos renderizar. Si falla, capturamos el error para mostrarlo en UI.
             const { svg } = await mermaid.render(id, graphDefinition);
             
             if (chartRef.current) {
                 chartRef.current.innerHTML = svg;
+                const svgElement = chartRef.current.querySelector('svg');
+                if (svgElement) {
+                    svgElement.style.maxWidth = 'none';
+                    svgElement.style.height = 'auto';
+                }
+                
                 attachListeners();
                 
-                // Centrado inicial aproximado
+                // Initial fitting
                 setTimeout(() => {
-                    setZoom(0.6); // Zoom alejado para ver todo
-                    setPan({ x: 50, y: 50 });
+                    autoFit();
                 }, 100);
             }
         } catch (e) { 
@@ -217,15 +221,34 @@ flowchart LR
         }
     };
 
+    const autoFit = () => {
+        if (!chartRef.current || !containerRef.current) return;
+        const svgElement = chartRef.current.querySelector('svg');
+        if (!svgElement) return;
+
+        const containerWidth = containerRef.current.clientWidth;
+        const containerHeight = containerRef.current.clientHeight;
+        const bbox = svgElement.getBBox();
+        
+        const scaleX = (containerWidth - 100) / bbox.width;
+        const scaleY = (containerHeight - 100) / bbox.height;
+        const initialScale = Math.min(scaleX, scaleY, 1);
+        
+        setZoom(initialScale);
+        setPan({ 
+            x: (containerWidth - bbox.width * initialScale) / 2, 
+            y: (containerHeight - bbox.height * initialScale) / 2 
+        });
+    };
+
     const attachListeners = () => {
         const nodes = chartRef.current.querySelectorAll('.node');
         nodes.forEach(n => {
             n.style.cursor = 'pointer';
             n.onclick = (e) => {
                 e.stopPropagation();
-                // Buscar texto dentro del nodo (puede estar anidado en tspans)
                 const text = n.textContent.trim();
-                const key = Object.keys(definitions).find(k => text.includes(k) || k.includes(text));
+                const key = Object.keys(definitions).find(k => text.includes(k) || key.includes(text));
                 if (key) setSelectedTerm({ term: key, definition: definitions[key] });
             };
         });
@@ -233,6 +256,7 @@ flowchart LR
 
     // --- Lógica de Arrastre (Pan) ---
     const onMouseDown = (e) => {
+        if (e.button !== 0) return; // Only left click
         setIsDragging(true);
         setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     };
@@ -243,6 +267,30 @@ flowchart LR
     };
     const onMouseUp = () => setIsDragging(false);
 
+    const onWheel = (e) => {
+        e.preventDefault();
+        const scaleFactor = 1.1;
+        const direction = e.deltaY < 0 ? 1 : -1;
+        const newZoom = direction > 0 ? zoom * scaleFactor : zoom / scaleFactor;
+        
+        // Limit zoom
+        const finalZoom = Math.min(Math.max(newZoom, 0.1), 4);
+        
+        // Adjust pan to zoom towards mouse position
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const dx = (mouseX - pan.x) / zoom;
+        const dy = (mouseY - pan.y) / zoom;
+        
+        setPan({
+            x: mouseX - dx * finalZoom,
+            y: mouseY - dy * finalZoom
+        });
+        setZoom(finalZoom);
+    };
+
     // --- Lógica de Búsqueda ---
     const handleSearch = (e) => {
         const val = e.target.value;
@@ -252,35 +300,21 @@ flowchart LR
     };
 
     const focusNode = (key) => {
-        // Encontrar el nodo en el DOM del SVG
-        // Nota: Mermaid genera IDs basados en el nombre del nodo (ej: C1, C2...)
-        // Buscamos por contenido de texto que es más fiable aquí.
         const nodes = Array.from(chartRef.current.querySelectorAll('.node'));
         const target = nodes.find(n => n.textContent.includes(key));
         
         if (target) {
-            // Calcular posición relativa del nodo dentro del SVG
-            // Nota: El SVG puede ser muy grande. Usamos transformaciones CSS en el padre.
-            // La estrategia es: mover el 'pan' para que el nodo quede al centro.
+            // Reset zoom/pan or focus specifically
+            setZoom(1.2);
+            // We'd need accurate bbox of target to pan perfectly, but for now we reset pan
+            setPan({ x: 50, y: 50 });
             
-            // 1. Obtener coordenadas del nodo relativas al contenedor del chartRef
-            // Esto es complicado porque el SVG está escalado internamente.
-            // Simplificación: Resetear zoom y buscar visualmente o destacar.
-            
-            setZoom(1); // Zoom normal para leer
-            setPan({ x: 0, y: 0 }); // Reset pan temporalmente
-            
-            // Destacar visualmente
+            target.style.filter = 'drop-shadow(0 0 15px rgba(59, 130, 246, 1))';
             target.classList.add('animate-pulse');
-            target.style.filter = 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.8))';
             setTimeout(() => {
                 target.style.filter = '';
                 target.classList.remove('animate-pulse');
-            }, 2500);
-            
-            // Intentar hacer scrollIntoView si el contenedor lo permite (overflow-hidden lo bloquea, pero es visual)
-            // Como usamos transform, scrollIntoView no funciona bien.
-            // Alternativa: Mostrar mensaje de "Encontrado".
+            }, 3000);
         }
         setSearchTerm('');
         setSearchResults([]);
@@ -316,14 +350,18 @@ flowchart LR
                         <button onClick={() => setZoom(z => Math.max(z-0.1, 0.1))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
                         <button onClick={() => setZoom(z => Math.min(z+0.1, 4))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
                     </div>
-                    <button onClick={() => { setZoom(0.6); setPan({x:50,y:50}); }} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl">Reset</button>
+                    <button onClick={autoFit} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl shadow-lg hover:bg-blue-600 transition-all">Reset</button>
                 </div>
             </div>
 
-            {/* Área del Diagrama con Manejo de Errores */}
+            {/* Área del Diagrama */}
             <div 
                 className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-slate-50 overflow-hidden ${isDragging ? 'cursor-grabbing' : ''}`}
-                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+                onMouseDown={onMouseDown} 
+                onMouseMove={onMouseMove} 
+                onMouseUp={onMouseUp} 
+                onMouseLeave={onMouseUp}
+                onWheel={onWheel}
             >
                 {isLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-30">
@@ -345,11 +383,9 @@ flowchart LR
                     style={{ 
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
                         transformOrigin: '0 0',
-                        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-                        width: 'fit-content',
-                        height: 'fit-content'
+                        transition: isDragging ? 'none' : 'transform 0.15s ease-out',
                     }}
-                    className="absolute p-20"
+                    className="absolute"
                     ref={chartRef}
                 ></div>
             </div>

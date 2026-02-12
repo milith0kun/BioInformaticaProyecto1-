@@ -113,9 +113,15 @@
             position: relative;
             width: 100%;
             height: 800px;
-            overflow: auto;
+            overflow: hidden; /* Changed from auto to hidden for drag-to-pan */
             background: #fafafa;
             border: 2px solid #ddd;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .diagram-wrapper:active {
+            cursor: grabbing;
         }
         
         .diagram-container {
@@ -124,6 +130,7 @@
             padding: 40px;
             min-width: 100%;
             display: inline-block;
+            will-change: transform;
         }
         
         .mermaid {
@@ -520,6 +527,38 @@ C66 -->|se apoya en| C69["69. Bioinformática"]
                     zoomOut();
                 }
             }
+        });
+
+        // Funcionalidad de Arrastre (Pan)
+        const wrapper = document.getElementById('diagramWrapper');
+        let isDragging = false;
+        let startX, startY, scrollLeft, scrollTop;
+
+        wrapper.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.pageX - wrapper.offsetLeft;
+            startY = e.pageY - wrapper.offsetTop;
+            scrollLeft = wrapper.scrollLeft;
+            scrollTop = wrapper.scrollTop;
+        });
+
+        wrapper.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
+
+        wrapper.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        wrapper.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - wrapper.offsetLeft;
+            const y = e.pageY - wrapper.offsetTop;
+            const walkX = (x - startX) * 1.5;
+            const walkY = (y - startY) * 1.5;
+            wrapper.scrollLeft = scrollLeft - walkX;
+            wrapper.scrollTop = scrollTop - walkY;
         });
         
         // Función para mostrar modal con definición

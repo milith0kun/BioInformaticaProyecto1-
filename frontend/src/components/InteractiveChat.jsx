@@ -51,7 +51,7 @@ const parseInline = (text) => {
   return parsed
 }
 
-export default function InteractiveChat({ hasAnalysis, currentGenome }) {
+export default function InteractiveChat({ hasAnalysis, currentGenome, isFloating, onClose }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -121,7 +121,7 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
   }
 
   return (
-    <div className="flex flex-col h-[800px] animate-in fade-in duration-1000 overflow-hidden rounded-[3rem] border-2 border-slate-100 shadow-sm bg-slate-50 relative">
+    <div className={`flex flex-col ${isFloating ? 'h-full w-full rounded-[2.5rem]' : 'h-[800px] rounded-[3rem]'} animate-in fade-in duration-1000 overflow-hidden border-2 border-slate-100 shadow-sm bg-slate-50 relative`}>
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-20 -right-20 w-96 h-96 bg-blue-500/5 blur-[100px] rounded-full"></div>
@@ -129,32 +129,41 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
       </div>
 
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md p-6 border-b border-slate-100 flex items-center justify-between z-10 sticky top-0">
-        <div className="flex items-center gap-5">
+      <div className={`bg-white/80 backdrop-blur-md ${isFloating ? 'p-4' : 'p-6'} border-b border-slate-100 flex items-center justify-between z-10 sticky top-0`}>
+        <div className="flex items-center gap-4">
           <div className="relative">
-            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200">
-              <span className="text-2xl">🧬</span>
+            <div className={`${isFloating ? 'w-10 h-10' : 'w-12 h-12'} bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200`}>
+              <span className={isFloating ? 'text-xl' : 'text-2xl'}>🧬</span>
             </div>
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full animate-pulse shadow-sm" title="Sistema Online"></div>
+            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full animate-pulse shadow-sm" title="Sistema Online"></div>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Dr. GenomicAI</h3>
+            <h3 className={`${isFloating ? 'text-xs' : 'text-sm'} font-black uppercase tracking-widest text-slate-900`}>Dr. GenomicAI</h3>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">
+              <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">
                 {currentGenome ? `Contexto: ${currentGenome.accession || currentGenome}` : 'Esperando Genoma'}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black text-slate-400 uppercase tracking-widest border border-slate-200">
-            NCBI Connected
-          </span>
+        <div className="flex items-center gap-2">
+          {isFloating && onClose && (
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+          {!isFloating && (
+            <span className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black text-slate-400 uppercase tracking-widest border border-slate-200">
+              NCBI Connected
+            </span>
+          )}
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar relative z-0">
+      <div className={`flex-1 overflow-y-auto ${isFloating ? 'p-5 space-y-6' : 'p-8 space-y-8'} custom-scrollbar relative z-0`}>
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}>
 
@@ -264,13 +273,13 @@ export default function InteractiveChat({ hasAnalysis, currentGenome }) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Pregunta sobre genes, codones, o análisis evolutivo..."
-            className="w-full pl-6 pr-32 py-5 bg-slate-50 border-2 border-slate-100 rounded-[2rem] text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner placeholder-slate-400"
+            placeholder="Pregunta..."
+            className={`w-full ${isFloating ? 'pl-4 pr-24 py-3' : 'pl-6 pr-32 py-5'} bg-slate-50 border-2 border-slate-100 rounded-[2rem] text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner placeholder-slate-400`}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="absolute right-2 top-2 bottom-2 px-8 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:shadow-none active:scale-95"
+            className={`absolute right-2 top-2 bottom-2 ${isFloating ? 'px-4' : 'px-8'} bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:shadow-none active:scale-95`}
           >
             {isLoading ? '...' : 'Enviar'}
           </button>

@@ -193,6 +193,7 @@ const graphData = {
 const NetworkMap = () => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
+    const zoomRef = useRef(null); // Ref to store zoom behavior
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedTooltip, setSelectedTooltip] = useState(null);
@@ -223,6 +224,14 @@ const NetworkMap = () => {
 
         svg.selectAll("*").remove(); 
 
+        // 1. Background rect to capture zoom/pan everywhere
+        svg.append("rect")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("fill", "transparent")
+            .style("pointer-events", "all")
+            .on("click", () => setSelectedTooltip(null));
+
         const defs = svg.append("defs");
         defs.append("marker")
             .attr("id", "arrow-normal")
@@ -237,15 +246,6 @@ const NetworkMap = () => {
             .attr("fill", "#999");
 
         const g = svg.append("g");
-
-        // Transparent background for zoom
-        g.append("rect")
-            .attr("width", width * 4)
-            .attr("height", height * 4)
-            .attr("x", -width * 2)
-            .attr("y", -height * 2)
-            .attr("fill", "transparent")
-            .style("pointer-events", "all");
 
         const linkGroup = g.append("g").attr("class", "links");
         const linkLabelGroup = g.append("g").attr("class", "link-labels");
@@ -276,7 +276,20 @@ const NetworkMap = () => {
             .join("line")
             .attr("stroke", "#cbd5e1")
             .attr("stroke-width", 1.5)
-            .attr("marker-end", "url(#arrow-normal)");
+            .attr("marker-end", "url(#arrow-normal)")
+            .style("cursor", "pointer")
+            .on("mouseover", (event, d) => {
+                d3.select(event.currentTarget).attr("stroke", "#3b82f6").attr("stroke-width", 3);
+                setSelectedTooltip({
+                    x: event.clientX,
+                    y: event.clientY,
+                    data: { label: `Relación: ${d.label}`, concepto: `${d.source.id} → ${d.target.id}`, group: 'Conexión' }
+                });
+            })
+            .on("mouseout", (event) => {
+                d3.select(event.currentTarget).attr("stroke", "#cbd5e1").attr("stroke-width", 1.5);
+                setSelectedTooltip(prev => (prev && !prev.isStatic) ? null : prev);
+            });
 
         const linkLabel = linkLabelGroup.selectAll("text")
             .data(links)
@@ -294,11 +307,17 @@ const NetworkMap = () => {
             .attr("stroke", d => getColor(d.group).stroke)
             .attr("stroke-width", 2)
             .attr("cursor", "pointer")
+            .style("pointer-events", "all")
             .on("click", (event, d) => {
-                focusOnNode(d);
                 event.stopPropagation();
+                focusOnNode(d);
             })
             .on("mouseover", (event, d) => {
+                d3.select(event.currentTarget)
+                    .transition().duration(200)
+                    .attr("r", getNodeRadius(d.id) * 1.4)
+                    .attr("stroke-width", 4);
+                
                 setSelectedTooltip({
                     x: event.clientX,
                     y: event.clientY,
@@ -306,9 +325,16 @@ const NetworkMap = () => {
                 });
             })
             .on("mousemove", (event) => {
-                setSelectedTooltip(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
+                setSelectedTooltip(prev => (prev && !prev.isStatic) ? { ...prev, x: event.clientX, y: event.clientY } : prev);
             })
-            .on("mouseout", () => setSelectedTooltip(null))
+            .on("mouseout", (event, d) => {
+                d3.select(event.currentTarget)
+                    .transition().duration(200)
+                    .attr("r", getNodeRadius(d.id))
+                    .attr("stroke-width", 2);
+                
+                setSelectedTooltip(prev => (prev && !prev.isStatic) ? null : prev);
+            })
             .call(d3.drag()
                 .on("start", (event, d) => {
                     if (!event.active) sim.alphaTarget(0.3).restart();
@@ -342,17 +368,29 @@ const NetworkMap = () => {
 
         const zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => g.attr("transform", event.transform));
         svg.call(zoom);
+        zoomRef.current = zoom; // Store in ref
 
         setSimulation(sim);
         return () => sim.stop();
     }, []);
 
     const focusOnNode = (node) => {
+        if (!containerRef.current || !zoomRef.current) return;
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
         const scale = 2;
         const transform = d3.zoomIdentity.translate(width / 2 - node.x * scale, height / 2 - node.y * scale).scale(scale);
-        d3.select(svgRef.current).transition().duration(1000).call(d3.zoom().transform, transform);
+        
+        d3.select(svgRef.current).transition().duration(1000).call(zoomRef.current.transform, transform);
+
+        // Show tooltip at center when focusing
+        const rect = containerRef.current.getBoundingClientRect();
+        setSelectedTooltip({
+            x: rect.left + width / 2 - 150, // Offset to show near center
+            y: rect.top + height / 2 - 100,
+            data: node,
+            isStatic: true // Flag to distinguish from mouse-following tooltip
+        });
     };
 
     useEffect(() => {
@@ -392,7 +430,7 @@ const NetworkMap = () => {
                 </div>
                 <div className="flex gap-2 pointer-events-auto">
                     <button onClick={() => simulation.alpha(1).restart()} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 shadow-lg">Reiniciar</button>
-                    <button onClick={() => d3.select(svgRef.current).transition().call(d3.zoom().transform, d3.zoomIdentity)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-200">Centrar</button>
+                    <button onClick={() => d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-200">Centrar</button>
                 </div>
             </div>
 

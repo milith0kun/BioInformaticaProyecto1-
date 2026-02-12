@@ -701,32 +701,16 @@ const getNodeRadius = (nodeId) => {
 
 // --- 5. NAVEGACIÓN Y ZOOM ---
 let currentTransform = d3.zoomIdentity;
-let isDragging = false;
 
 const zoom = d3.zoom()
   .scaleExtent([0.1, 4])
   .on("zoom", (event) => {
-    if (!isDragging) {
-      currentTransform = event.transform;
-      g.attr("transform", currentTransform);
-      updateMinimap();
-    }
+    currentTransform = event.transform;
+    g.attr("transform", currentTransform);
+    updateMinimap();
   });
 
 svg.call(zoom);
-
-// Permitir arrastre del fondo
-svg.on("mousedown", function(event) {
-  if (event.target === this || event.target.tagName === 'svg') {
-    isDragging = true;
-    container.classList.add('grabbing');
-  }
-});
-
-svg.on("mouseup", () => {
-  isDragging = false;
-  container.classList.remove('grabbing');
-});
 
 // Funciones de navegación
 function adjustZoom(factor) {
