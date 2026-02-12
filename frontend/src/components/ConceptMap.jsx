@@ -99,6 +99,8 @@ const ConceptMap = () => {
 
     const renderDiagram = async () => {
         setIsLoading(true);
+        setError(null);
+
         const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
@@ -182,12 +184,50 @@ flowchart LR
         try {
             const id = `mermaid-id-${Math.random().toString(36).substr(2, 9)}`;
             const { svg } = await mermaid.render(id, graphDefinition);
+            
             if (chartRef.current) {
                 chartRef.current.innerHTML = svg;
+                const svgElement = chartRef.current.querySelector('svg');
+                if (svgElement) {
+                    svgElement.style.maxWidth = 'none';
+                    svgElement.style.height = 'auto';
+                    svgElement.style.width = 'auto';
+                }
                 attachListeners();
+                setTimeout(autoFit, 100);
             }
-        } catch (e) { console.error("Mermaid Render Error:", e); }
-        finally { setIsLoading(false); }
+        } catch (e) { 
+            console.error("Mermaid Render Error:", e); 
+            setError("Error al generar el mapa. Intente recargar.");
+        } finally { setIsLoading(false); }
+    };
+
+    const autoFit = () => {
+        if (!chartRef.current || !containerRef.current) return;
+        const svgElement = chartRef.current.querySelector('svg');
+        if (!svgElement) return;
+
+        const cw = containerRef.current.clientWidth || 800;
+        const ch = containerRef.current.clientHeight || 600;
+        
+        try {
+            const bbox = svgElement.getBBox();
+            if (bbox.width === 0 || bbox.height === 0) return;
+
+            const scaleX = (cw - 60) / bbox.width;
+            const scaleY = (ch - 60) / bbox.height;
+            const scale = Math.min(scaleX, scaleY, 1);
+            
+            setZoom(scale);
+            setPan({
+                x: (cw - bbox.width * scale) / 2 - bbox.x * scale,
+                y: (ch - bbox.height * scale) / 2 - bbox.y * scale
+            });
+        } catch (e) {
+            console.warn("BBox calculation failed, using defaults");
+            setZoom(0.8);
+            setPan({ x: 20, y: 20 });
+        }
     };
 
     const attachListeners = () => {
@@ -205,6 +245,7 @@ flowchart LR
     };
 
     const onMouseDown = (e) => {
+        if (e.button !== 0) return;
         setIsDragging(true);
         setStartPos({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     };
@@ -226,9 +267,7 @@ flowchart LR
         const target = nodes.find(n => n.textContent.includes(key));
         if (target) {
             setZoom(1.1);
-            // Centrado aproximado: el SVG es grande, movemos el pan para que el nodo sea visible
-            // Usamos una lógica de reset para que el usuario pueda localizarlo
-            setPan({ x: 100, y: 100 });
+            setPan({ x: 50, y: 50 });
             target.style.filter = 'brightness(1.5) drop-shadow(0 0 15px #3b82f6)';
             setTimeout(() => target.style.filter = '', 3000);
         }
@@ -237,9 +276,9 @@ flowchart LR
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" style={{ minHeight: '800px' }}>
+        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" ref={containerRef}>
             {/* Header */}
-            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shrink-0">
+            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shrink-0 shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
@@ -249,12 +288,12 @@ flowchart LR
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Dinámica</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 relative">
+                <div className="flex items-center gap-3 relative z-30">
                     <div className="relative">
                         <input type="text" value={searchTerm} onChange={handleSearch} placeholder="Buscar..." className="w-48 pl-10 pr-4 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none" />
                         <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
                         {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-48 overflow-y-auto z-50">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-48 overflow-y-auto">
                                 {searchResults.map(k => (
                                     <button key={k} onClick={() => focusNode(k)} className="w-full text-left px-4 py-2 hover:bg-blue-50 text-[10px] font-bold border-b last:border-0">{k}</button>
                                 ))}
@@ -265,7 +304,7 @@ flowchart LR
                         <button onClick={() => setZoom(z => Math.max(z-0.1, 0.1))} className="p-1.5 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
                         <button onClick={() => setZoom(z => Math.min(z+0.1, 3))} className="p-1.5 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
                     </div>
-                    <button onClick={() => { setZoom(0.7); setPan({x:20,y:20}); }} className="px-3 py-2 bg-slate-900 text-white text-[9px] font-black uppercase rounded-xl">Reset</button>
+                    <button onClick={autoFit} className="px-3 py-2 bg-slate-900 text-white text-[9px] font-black uppercase rounded-xl">Reset</button>
                 </div>
             </div>
 
@@ -281,9 +320,12 @@ flowchart LR
                     style={{ 
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
                         transformOrigin: '0 0',
-                        transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)'
+                        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        willChange: 'transform'
                     }}
-                    className="absolute p-10"
                     ref={chartRef}
                 ></div>
             </div>
