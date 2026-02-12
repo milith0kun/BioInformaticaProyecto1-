@@ -617,27 +617,6 @@ function App() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="hidden md:flex relative group mr-4">
-                  <input
-                    type="text"
-                    value={globalSearch}
-                    onChange={(e) => setGlobalSearch(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && globalSearch.trim()) {
-                        // Global search logic: if in step 1, pass to selector
-                        // if in step 3, filter view or search genes
-                        if (currentStep === 1) {
-                          // Handled by component via shared state or props if needed
-                        }
-                        toast.success(`Buscando: ${globalSearch}`)
-                      }
-                    }}
-                    placeholder="Búsqueda global..."
-                    className="w-64 pl-10 pr-4 py-2 bg-slate-100 border-none rounded-2xl text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  />
-                  <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
-                </div>
-
                 {currentStep === 3 && (
                   <>
                     <button
