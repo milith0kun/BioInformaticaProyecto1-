@@ -80,122 +80,145 @@ const ConceptMap = () => {
     const [selectedTerm, setSelectedTerm] = useState(null);
     const chartRef = useRef(null);
     const containerRef = useRef(null);
+    const [renderKey, setRenderKey] = useState(0);
 
     // Initial render logic
     useEffect(() => {
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'default', // Or 'base' for more customization
-            securityLevel: 'loose',
-            flowchart: {
-                useMaxWidth: false,
-                htmlLabels: true,
-                curve: 'basis'
-            }
-        });
-
         const renderDiagram = async () => {
-            if (chartRef.current) {
-                const graphDefinition = `
+            if (!chartRef.current) return;
+
+            // Clear previous content
+            chartRef.current.innerHTML = '';
+            
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'default',
+                securityLevel: 'loose',
+                fontFamily: 'Inter, sans-serif',
+                flowchart: {
+                    useMaxWidth: false,
+                    htmlLabels: true,
+                    curve: 'basis'
+                }
+            });
+
+            const graphDefinition = `
 flowchart LR
-%% NÚCLEO
-C1["1. Célula"] -->|sustenta| C2["2. Teoría celular"]
-C1 -->|presenta| C3["3. Ciclo de vida celular"]
-C1 -->|ejecuta| C4["4. Vía metabólica"]
-C1 -->|contiene| C5["5. ADN"]
-C1 -->|contiene| C6["6. ARN"]
-C1 -->|produce| C7["7. Proteína"]
-%% INFORMACIÓN GENÉTICA
-C5 -->|se organiza en| C9["9. Cromosoma"]
-C5 -->|incluye| C10["10. Gen"]
-C10 -->|explica| C11["11. Herencia mendeliana"]
-C5 -->|sufre| C12["12. Mutación"]
-C10 -->|presenta| C13["13. Ligamiento genético"]
-C10 -->|se ordena en| C14["14. Mapa genético"]
-C10 -->|se asocia con| C15["15. Un gen–una proteína"]
-%% ESTRUCTURA MOLECULAR
-C5 -->|está formado por| C16["16. Nucleótido"]
-C16 -->|incluye| C17["17. Bases nitrogenadas"]
-C5 -->|obedece| C18["18. Regla de Chargaff"]
-C5 -->|adopta| C19["19. Doble hélice"]
-C5 -->|usa| C20["20. Complementariedad de bases"]
-C5 -->|se copia por| C21["21. Replicación del ADN"]
-%% TIPOS CELULARES
-C1 -->|puede ser| C22["22. Célula eucariota"]
-C1 -->|puede ser| C23["23. Célula procariota"]
-%% EXPRESIÓN GÉNICA
-C10 -->|se transcribe mediante| C26["26. Transcripción"]
-C26 -->|es catalizada por| C27["27. ARN polimerasa"]
-C26 -->|produce| C28["28. ARN mensajero"]
-C28 -->|es modificado por| C29["29. Splicing"]
-C28 -->|contiene| C24["24. Exón"]
-C28 -->|elimina| C25["25. Intrón"]
-%% TRADUCCIÓN
-C28 -->|se traduce por| C30["30. Traducción"]
-C30 -->|es realizada por| C31["31. Ribosoma"]
-C30 -->|usa| C32["32. Aminoácido"]
-C32 -->|forma| C33["33. Polipéptido"]
-C30 -->|produce| C7
-%% CÓDIGO GENÉTICO
-C28 -->|se lee en| C34["34. Codón"]
-C34 -->|pertenece al| C35["35. Código genético"]
-C35 -->|presenta| C36["36. Degeneración del código genético"]
-C34 -->|puede ser| C37["37. Codón de inicio"]
-C34 -->|puede ser| C38["38. Codón de terminación"]
-C30 -->|requiere| C39["39. ARNt"]
-C39 -->|usa| C40["40. Anticodón"]
-%% MARCO CONCEPTUAL
-C5 -->|fluye según| C41["41. Dogma central"]
-C6 -->|fluye según| C41
-C7 -->|fluye según| C41
-C5 -->|se representa en| C8["8. Alfabeto molecular"]
-C6 -->|se representa en| C8
-C7 -->|se representa en| C8
-%% TÉCNICAS MOLECULARES
-C5 -->|se amplifica por| C42["42. PCR"]
-C42 -->|requiere| C43["43. Cebador"]
-C42 -->|incluye| C44["44. Desnaturalización"]
-C42 -->|incluye| C45["45. Alineamiento"]
-C42 -->|incluye| C46["46. Extensión"]
-C5 -->|se inserta mediante| C47["47. Clonación molecular"]
-C47 -->|utiliza| C48["48. Vector de clonación"]
-C47 -->|genera| C49["49. Biblioteca de clones"]
-C5 -->|es cortado por| C50["50. Enzima de restricción"]
-C50 -->|reconoce| C51["51. Sitio de reconocimiento"]
-C50 -->|produce| C52["52. Extremos romos"]
-C50 -->|produce| C53["53. Extremos pegajosos"]
-C5 -->|se une por| C54["54. Hibridación"]
-C5 -->|se sella por| C55["55. Ligación"]
-C5 -->|se separa por| C56["56. Electroforesis en gel"]
-C5 -->|se detecta con| C57["57. Sonda"]
-C10 -->|se analiza con| C58["58. Microarreglo"]
-%% VARIACIÓN Y EVOLUCIÓN
-C5 -->|presenta| C59["59. Variación genética intraespecífica"]
-C5 -->|se compara con| C60["60. Genoma de referencia"]
-C59 -->|contribuye a| C61["61. Conservación genética"]
-C61 -->|evidencia| C62["62. Evolución"]
-C62 -->|opera por| C63["63. Selección natural"]
-C63 -->|favorece| C64["64. Adaptación"]
-C64 -->|origina| C65["65. Especiación"]
-%% ANÁLISIS COMPUTACIONAL
-C5 -->|se estudia con| C66["66. Genómica comparativa"]
-C5 -->|se compara mediante| C67["67. Alineamiento de secuencias"]
-C67 -->|se implementa en| C68["68. BLAST"]
-C66 -->|se apoya en| C69["69. Bioinformática"]
+    classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold;
+    classDef important fill:#eff6ff,stroke:#3b82f6,stroke-width:3px,color:#1d4ed8;
+    
+    C1["1. Célula"]:::important -->|sustenta| C2["2. Teoría celular"]
+    C1 -->|presenta| C3["3. Ciclo de vida celular"]
+    C1 -->|ejecuta| C4["4. Vía metabólica"]
+    C1 -->|contiene| C5["5. ADN"]:::important
+    C1 -->|contiene| C6["6. ARN"]:::important
+    C1 -->|produce| C7["7. Proteína"]:::important
+    %% ... (rest of the graph definition remains same)
+`;
+            
+            // Re-using the same long graph definition from the original file
+            const fullGraphDef = `
+flowchart LR
+    classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
+    classDef highlight fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1d4ed8;
+    classDef process fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#15803d;
+
+    C1["1. Célula"]:::highlight -->|sustenta| C2["2. Teoría celular"]
+    C1 -->|presenta| C3["3. Ciclo de vida celular"]
+    C1 -->|ejecuta| C4["4. Vía metabólica"]
+    C1 -->|contiene| C5["5. ADN"]:::highlight
+    C1 -->|contiene| C6["6. ARN"]:::highlight
+    C1 -->|produce| C7["7. Proteína"]:::highlight
+    C5 -->|se organiza en| C9["9. Cromosoma"]
+    C5 -->|incluye| C10["10. Gen"]:::highlight
+    C10 -->|explica| C11["11. Herencia mendeliana"]
+    C5 -->|sufre| C12["12. Mutación"]
+    C10 -->|presenta| C13["13. Ligamiento genético"]
+    C10 -->|se ordena en| C14["14. Mapa genético"]
+    C10 -->|se asocia con| C15["15. Un gen–una proteína"]
+    C5 -->|está formado por| C16["16. Nucleótido"]
+    C16 -->|incluye| C17["17. Bases nitrogenadas"]
+    C5 -->|obedece| C18["18. Regla de Chargaff"]
+    C5 -->|adopta| C19["19. Doble hélice"]
+    C5 -->|usa| C20["20. Complementariedad de bases"]
+    C5 -->|se copia por| C21["21. Replicación del ADN"]:::process
+    C1 -->|puede ser| C22["22. Célula eucariota"]
+    C1 -->|puede ser| C23["23. Célula procariota"]
+    C10 -->|se transcribe mediante| C26["26. Transcripción"]:::process
+    C26 -->|es catalizada por| C27["27. ARN polimerasa"]
+    C26 -->|produce| C28["28. ARN mensajero"]
+    C28 -->|es modificado por| C29["29. Splicing"]:::process
+    C28 -->|contiene| C24["24. Exón"]
+    C28 -->|elimina| C25["25. Intrón"]
+    C28 -->|se traduce por| C30["30. Traducción"]:::process
+    C30 -->|es realizada por| C31["31. Ribosoma"]
+    C30 -->|usa| C32["32. Aminoácido"]
+    C32 -->|forma| C33["33. Polipéptido"]
+    C30 -->|produce| C7
+    C28 -->|se lee en| C34["34. Codón"]
+    C34 -->|pertenece al| C35["35. Código genético"]
+    C35 -->|presenta| C36["36. Degeneración del código genético"]
+    C34 -->|puede ser| C37["37. Codón de inicio"]
+    C34 -->|puede ser| C38["38. Codón de terminación"]
+    C30 -->|requiere| C39["39. ARNt"]
+    C39 -->|usa| C40["40. Anticodón"]
+    C5 -->|fluye según| C41["41. Dogma central"]:::highlight
+    C6 -->|fluye según| C41
+    C7 -->|fluye según| C41
+    C5 -->|se representa en| C8["8. Alfabeto molecular"]
+    C6 -->|se representa en| C8
+    C7 -->|se representa en| C8
+    C5 -->|se amplifica por| C42["42. PCR"]:::process
+    C42 -->|requiere| C43["43. Cebador"]
+    C42 -->|incluye| C44["44. Desnaturalización"]
+    C42 -->|incluye| C45["45. Alineamiento"]
+    C42 -->|incluye| C46["46. Extensión"]
+    C5 -->|se inserta mediante| C47["47. Clonación molecular"]:::process
+    C47 -->|utiliza| C48["48. Vector de clonación"]
+    C47 -->|genera| C49["49. Biblioteca de clones"]
+    C5 -->|es cortado por| C50["50. Enzima de restricción"]
+    C50 -->|reconoce| C51["51. Sitio de reconocimiento"]
+    C50 -->|produce| C52["52. Extremos romos"]
+    C50 -->|produce| C53["53. Extremos pegajosos"]
+    C5 -->|se une por| C54["54. Hibridación"]
+    C5 -->|se sella por| C55["55. Ligación"]
+    C5 -->|se separa por| C56["56. Electroforesis en gel"]
+    C5 -->|se detecta con| C57["57. Sonda"]
+    C10 -->|se analiza con| C58["58. Microarreglo"]
+    C5 -->|presenta| C59["59. Variación genética intraespecífica"]
+    C5 -->|se compara con| C60["60. Genoma de referencia"]
+    C59 -->|contribuye a| C61["61. Conservación genética"]
+    C61 -->|evidencia| C62["62. Evolución"]:::highlight
+    C62 -->|opera por| C63["63. Selección natural"]
+    C63 -->|favorece| C64["64. Adaptación"]
+    C64 -->|origina| C65["65. Especiación"]
+    C5 -->|se estudia con| C66["66. Genómica comparativa"]
+    C5 -->|se compara mediante| C67["67. Alineamiento de secuencias"]
+    C67 -->|se implementa en| C68["68. BLAST"]
+    C66 -->|se apoya en| C69["69. Bioinformática"]:::highlight
 `;
 
-                try {
-                    const { svg } = await mermaid.render('mermaid-chart', graphDefinition);
+            try {
+                // Ensure unique ID for each render to avoid conflicts
+                const id = `mermaid-chart-${Date.now()}`;
+                const { svg } = await mermaid.render(id, fullGraphDef);
+                if (chartRef.current) {
                     chartRef.current.innerHTML = svg;
-                    fitToScreen();
-                } catch (error) {
-                    console.error('Mermaid render error:', error);
+                    // Add small delay to ensure SVG is in DOM before calculating zoom
+                    setTimeout(fitToScreen, 100);
                 }
+            } catch (error) {
+                console.error('Mermaid render error:', error);
             }
         };
 
-        renderDiagram();
-    }, []);
+        // Use requestAnimationFrame to ensure the DOM is ready
+        const timer = setTimeout(() => {
+            renderDiagram();
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [renderKey]); // Re-render when key changes
 
     // Add click listeners to nodes
     useEffect(() => {

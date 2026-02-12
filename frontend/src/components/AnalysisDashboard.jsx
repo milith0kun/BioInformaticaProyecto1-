@@ -2,6 +2,7 @@
  * AnalysisDashboard Component
  * Main dashboard showing analysis overview and key metrics
  */
+import { useState } from 'react'
 
 const STATUS_COLORS = {
   PASS: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -52,6 +53,8 @@ function formatNumber(num) {
 }
 
 export default function AnalysisDashboard({ analysisData, isLoading, status }) {
+  const [localSearch, setLocalSearch] = useState('')
+
   if (status === 'idle' && !analysisData) {
     return (
       <div className="text-center py-32 px-8">
@@ -92,6 +95,23 @@ export default function AnalysisDashboard({ analysisData, isLoading, status }) {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-1000">
+      {/* Search & Action Bar */}
+      <div className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-6 flex flex-col md:flex-row items-center gap-6">
+        <div className="flex-1 relative w-full group">
+          <input
+            type="text"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            placeholder="Buscar genes, proteínas o funciones..."
+            className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500/30 transition-all outline-none"
+          />
+          <svg className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">Analizar Query</button>
+        </div>
+      </div>
+
       {/* Principal Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 

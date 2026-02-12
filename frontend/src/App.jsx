@@ -21,6 +21,7 @@ import FunctionalCategories from './components/FunctionalCategories'
 import CAIAnalysis from './components/CAIAnalysis'
 import ConceptMap from './components/ConceptMap'
 import NetworkMap from './components/NetworkMap'
+import FloatingMapButton from './components/FloatingMapButton'
 import { api } from './services/api'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
   const [downloadedGenomes, setDownloadedGenomes] = useState([])
   const [selectedGenomes, setSelectedGenomes] = useState([]) // Múltiples genomas seleccionados
   const [comparisonResult, setComparisonResult] = useState(null) // Resultado de comparación
+  const [globalSearch, setGlobalSearch] = useState('')
 
   // Vista activa para resultados (después del paso 3)
   const [activeView, setActiveView] = useState('dashboard')
@@ -431,6 +433,56 @@ function App() {
         )}
 
         {/* Navigation Sections */}
+        {currentStep < 3 && !miniSidebar && (
+          <div className="px-6 py-4 space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3">
+                Acceso Rápido
+              </h2>
+              <div className="space-y-1">
+                <button
+                  onClick={() => {
+                    setCurrentStep(3)
+                    setActiveView('concept-map')
+                  }}
+                  className="w-full flex items-center px-4 py-3 rounded-2xl text-xs text-slate-600 hover:bg-slate-50 transition-all group"
+                >
+                  <span className="text-slate-400 group-hover:text-blue-600">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons['concept-map']} />
+                    </svg>
+                  </span>
+                  <div className="ml-3 text-left">
+                    <span className="block font-black uppercase tracking-tight">Mapa Conceptual</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentStep(3)
+                    setActiveView('network-map')
+                  }}
+                  className="w-full flex items-center px-4 py-3 rounded-2xl text-xs text-slate-600 hover:bg-slate-50 transition-all group"
+                >
+                  <span className="text-slate-400 group-hover:text-emerald-600">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons['network-map']} />
+                    </svg>
+                  </span>
+                  <div className="ml-3 text-left">
+                    <span className="block font-black uppercase tracking-tight">Red Genómica Pro</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-center leading-relaxed">
+                El menú completo se activará al finalizar el análisis
+              </p>
+            </div>
+          </div>
+        )}
+
         {currentStep === 3 && (
           <>
             <div className={`p-6 border-b border-slate-50 flex-shrink-0 transition-all ${miniSidebar ? 'px-4' : 'px-6'}`}>
@@ -565,16 +617,52 @@ function App() {
               </div>
 
               <div className="flex items-center gap-3">
+                <div className="hidden md:flex relative group mr-4">
+                  <input
+                    type="text"
+                    value={globalSearch}
+                    onChange={(e) => setGlobalSearch(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && globalSearch.trim()) {
+                        // Global search logic: if in step 1, pass to selector
+                        // if in step 3, filter view or search genes
+                        if (currentStep === 1) {
+                          // Handled by component via shared state or props if needed
+                        }
+                        toast.success(`Buscando: ${globalSearch}`)
+                      }
+                    }}
+                    placeholder="Búsqueda global..."
+                    className="w-64 pl-10 pr-4 py-2 bg-slate-100 border-none rounded-2xl text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  />
+                  <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
+                </div>
+
                 {currentStep === 3 && (
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="flex items-center gap-3 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 transition-all hover:bg-blue-600 hover:-translate-y-1 active:scale-95"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Nueva Sesión
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setActiveView('network-map')}
+                      className="hidden sm:flex items-center gap-3 px-5 py-2.5 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-200 transition-all hover:bg-emerald-600 hover:-translate-y-1 active:scale-95"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      Mapa Pro
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setCurrentStep(1)
+                        setSelectedGenomes([])
+                        setAnalysisData(null)
+                        setComparisonResult(null)
+                      }}
+                      className="flex items-center gap-3 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 transition-all hover:bg-blue-600 hover:-translate-y-1 active:scale-95"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Nueva Sesión
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -736,6 +824,18 @@ function App() {
             )}
           </div>
         </main>
+
+        <FloatingMapButton 
+          activeView={activeView}
+          onOpenConcept={() => {
+            setCurrentStep(3)
+            setActiveView('concept-map')
+          }}
+          onOpenNetwork={() => {
+            setCurrentStep(3)
+            setActiveView('network-map')
+          }}
+        />
 
         {/* Bottom Bar */}
         <footer className="bg-white border-t border-slate-100 py-4 px-10 flex-shrink-0 flex items-center justify-between">

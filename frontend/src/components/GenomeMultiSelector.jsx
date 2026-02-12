@@ -20,29 +20,37 @@ export default function GenomeMultiSelector({
   const [searchLimit, setSearchLimit] = useState(50)
   const [showSuggestions, setShowSuggestions] = useState(true)
 
-  const allEcoliStrains = [
-    { accession: "GCF_000005845.2", organism: "E. coli K-12 MG1655", strain: "K-12", category: "laboratory" },
-    { accession: "GCF_000008865.2", organism: "E. coli O157:H7 Sakai", strain: "O157:H7", category: "pathogenic" },
-    { accession: "GCF_000009565.2", organism: "E. coli BL21(DE3)", strain: "BL21", category: "industrial" },
-    { accession: "GCF_000019425.1", organism: "E. coli CFT073", strain: "CFT073", category: "pathogenic" },
-    { accession: "GCF_000007445.1", organism: "E. coli W3110", strain: "W3110", category: "laboratory" },
-    { accession: "GCF_000750555.1", organism: "E. coli Nissle 1917", strain: "Nissle", category: "probiotic" },
-    { accession: "GCF_000013265.1", organism: "E. coli O127:H6 E2348/69", strain: "E2348/69", category: "pathogenic" },
-    { accession: "GCF_000017985.1", organism: "E. coli SE11", strain: "SE11", category: "laboratory" },
-    { accession: "GCF_000026245.1", organism: "E. coli ETEC H10407", strain: "H10407", category: "pathogenic" },
-    { accession: "GCF_000010385.1", organism: "E. coli O103:H2 12009", strain: "O103:H2", category: "pathogenic" },
-    { accession: "GCF_000025165.1", organism: "E. coli DH1", strain: "DH1", category: "laboratory" },
-    { accession: "GCF_000167715.1", organism: "E. coli C", strain: "C-ATCC 8739", category: "laboratory" },
-  ]
+  const [relatedStrains, setRelatedStrains] = useState([])
 
-  const [relatedStrains, setRelatedStrains] = useState(() => {
-    const shuffled = [...allEcoliStrains].sort(() => Math.random() - 0.5)
-    return shuffled.slice(0, 6)
-  })
+  useEffect(() => {
+    loadInitialStrains()
+  }, [])
+
+  const loadInitialStrains = async () => {
+    try {
+      const popular = await api.getPopularGenomes()
+      if (popular && popular.length > 0) {
+        setRelatedStrains(popular.slice(0, 12))
+      } else {
+        // Fallback to defaults if API fails or returns empty
+        const defaultStrains = [
+          { accession: "GCF_000005845.2", organism_name: "E. coli K-12 MG1655", category: "laboratory" },
+          { accession: "GCF_000008865.2", organism_name: "E. coli O157:H7 Sakai", category: "pathogenic" },
+          { accession: "GCF_000009565.2", organism_name: "E. coli BL21(DE3)", category: "industrial" },
+          { accession: "GCF_000019425.1", organism_name: "E. coli CFT073", category: "pathogenic" },
+          { accession: "GCF_000007445.1", organism_name: "E. coli W3110", category: "laboratory" },
+          { accession: "GCF_000750555.1", organism_name: "E. coli Nissle 1917", category: "probiotic" },
+        ]
+        setRelatedStrains(defaultStrains)
+      }
+    } catch (e) {
+      console.error("Error loading popular genomes:", e)
+    }
+  }
 
   const shuffleStrains = () => {
-    const shuffled = [...allEcoliStrains].sort(() => Math.random() - 0.5)
-    setRelatedStrains(shuffled.slice(0, 6))
+    const shuffled = [...relatedStrains].sort(() => Math.random() - 0.5)
+    setRelatedStrains(shuffled)
   }
 
   const searchSuggestions = [
@@ -50,6 +58,8 @@ export default function GenomeMultiSelector({
     { term: "Salmonella enterica", desc: "Salmonella" },
     { term: "Bacillus subtilis", desc: "Bacillus" },
     { term: "Staphylococcus aureus", desc: "Staph" },
+    { term: "Klebsiella pneumoniae", desc: "Klebsiella" },
+    { term: "Pseudomonas aeruginosa", desc: "Pseudomonas" },
   ]
 
   const searchGenomes = async (customQuery = null) => {
@@ -113,25 +123,42 @@ export default function GenomeMultiSelector({
         {/* Available Selection */}
         <div className="space-y-6">
           <div className="flex items-center justify-between px-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Genomas Sugeridos</h4>
-            <button onClick={shuffleStrains} className="text-[9px] font-black text-blue-600 uppercase tracking-widest hover:underline">Refrescar</button>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              {searchResults.length > 0 ? `Resultados NCBI (${searchResults.length})` : 'Genomas Sugeridos'}
+            </h4>
+            <div className="flex items-center gap-4">
+              {searchResults.length > 0 && (
+                <button 
+                  onClick={() => setSearchResults([])} 
+                  className="text-[9px] font-black text-rose-500 uppercase tracking-widest hover:underline"
+                >
+                  Limpiar Búsqueda
+                </button>
+              )}
+              <button onClick={shuffleStrains} className="text-[9px] font-black text-blue-600 uppercase tracking-widest hover:underline">Refrescar</button>
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-            {(searchResults.length > 0 ? searchResults : relatedStrains).map(s => {
+          <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar pb-10">
+            {isSearching ? (
+              <div className="py-20 text-center animate-pulse">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em]">Consultando NCBI...</p>
+              </div>
+            ) : (searchResults.length > 0 ? searchResults : relatedStrains).map(s => {
               const selected = isSelected(s.accession)
               return (
                 <button
                   key={s.accession}
                   onClick={() => toggleSelection(s.accession)}
-                  className={`w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all duration-500 ${
-                    selected ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-200' : 'bg-white border-slate-100 hover:border-blue-200 text-slate-900'
+                  className={`w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all duration-500 group ${
+                    selected ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-200' : 'bg-white border-slate-100 hover:border-blue-200 text-slate-900 shadow-sm'
                   }`}
                 >
-                  <div className="text-left">
-                    <p className={`font-mono text-[10px] font-black mb-1 ${selected ? 'text-blue-100' : 'text-blue-600'}`}>{s.accession}</p>
-                    <p className="text-xs font-black uppercase truncate tracking-tighter">{s.organism_name || s.organism}</p>
+                  <div className="text-left flex-1 min-w-0 pr-4">
+                    <p className={`font-mono text-[9px] font-black mb-1 ${selected ? 'text-blue-100' : 'text-blue-600'}`}>{s.accession}</p>
+                    <p className="text-[11px] font-black uppercase truncate tracking-tight">{s.organism_name || s.organism}</p>
+                    {s.strain && <p className={`text-[9px] font-bold ${selected ? 'text-blue-200' : 'text-slate-400'}`}>CEPA: {s.strain}</p>}
                   </div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${selected ? 'bg-white/20' : 'bg-slate-50 text-slate-300'}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${selected ? 'bg-white/20' : 'bg-slate-50 text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
                     {selected ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </div>
                 </button>
