@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as d3 from 'd3';
 
 // Definiciones del Mapa (69 Términos)
 const definitions = {
@@ -79,12 +78,15 @@ const definitions = {
 const ConceptMap = () => {
     const [selectedTerm, setSelectedTerm] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [zoom, setZoom] = useState(0.8);
+    const [pan, setPan] = useState({ x: 50, y: 50 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [startPos, setStartPan] = useState({ x: 0, y: 0 });
     
-    const svgRef = useRef(null);
-    const gRef = useRef(null);
+    const chartRef = useRef(null);
     const containerRef = useRef(null);
-    const zoomRef = useRef(null);
 
     useEffect(() => {
         mermaid.initialize({
@@ -93,14 +95,11 @@ const ConceptMap = () => {
             securityLevel: 'loose',
             flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' }
         });
-
         renderDiagram();
     }, []);
 
     const renderDiagram = async () => {
-        if (!svgRef.current) return;
         setIsLoading(true);
-
         const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
@@ -181,153 +180,120 @@ flowchart LR
     C67 -->|se implementa en| C68["68. BLAST"]
     C66 -->|se apoya en| C69["69. Bioinformática"]:::highlight
 `;
-
         try {
-            const id = `mermaid-render-${Date.now()}`;
-            const { svg: svgContent } = await mermaid.render(id, graphDefinition);
-            if (gRef.current) {
-                gRef.current.innerHTML = svgContent;
-                setupD3Zoom();
+            const id = `mermaid-id-${Math.random().toString(36).substr(2, 9)}`;
+            const { svg } = await mermaid.render(id, graphDefinition);
+            if (chartRef.current) {
+                chartRef.current.innerHTML = svg;
+                attachListeners();
             }
-        } catch (error) {
-            console.error('Mermaid render error:', error);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (e) { console.error(e); }
+        finally { setIsLoading(false); }
     };
 
-    const setupD3Zoom = () => {
-        const svg = d3.select(svgRef.current);
-        const g = d3.select(gRef.current);
-        
-        // Fix mermaid SVG to be responsive
-        const mermaidSvg = g.select('svg');
-        mermaidSvg.attr('width', '100%').attr('height', '100%').attr('preserveAspectRatio', 'xMinYMin meet');
-
-        const zoom = d3.zoom()
-            .scaleExtent([0.05, 5])
-            .on('zoom', (event) => {
-                g.attr('transform', event.transform);
-            });
-
-        zoomRef.current = zoom;
-        svg.call(zoom);
-
-        // Initial fit
-        const bbox = g.node().getBBox();
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-        const scale = Math.min(width / bbox.width, height / bbox.height) * 0.8;
-        
-        svg.call(zoom.transform, d3.zoomIdentity
-            .translate(width / 2 - (bbox.x + bbox.width / 2) * scale, height / 2 - (bbox.y + bbox.height / 2) * scale)
-            .scale(scale)
-        );
-
-        // Click events for nodes
-        g.selectAll('.node').on('click', function(event) {
-            event.stopPropagation();
-            const text = d3.select(this).text().trim();
-            const matchingKey = Object.keys(definitions).find(key => text.includes(key) || key.includes(text));
-            if (matchingKey) {
-                setSelectedTerm({ term: matchingKey, definition: definitions[matchingKey] });
-            }
+    const attachListeners = () => {
+        const nodes = chartRef.current.querySelectorAll('.node');
+        nodes.forEach(n => {
+            n.style.cursor = 'pointer';
+            n.onclick = (e) => {
+                e.stopPropagation();
+                const text = n.textContent.trim();
+                const key = Object.keys(definitions).find(k => text.includes(k) || k.includes(text));
+                if (key) setSelectedTerm({ term: key, definition: definitions[key] });
+            };
         });
     };
+
+    const onMouseDown = (e) => {
+        setIsDragging(true);
+        setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    };
+    const onMouseMove = (e) => {
+        if (!isDragging) return;
+        setPan({ x: e.clientX - startPos.x, y: e.clientY - startPos.y });
+    };
+    const onMouseUp = () => setIsDragging(false);
 
     const handleSearch = (e) => {
         const val = e.target.value;
         setSearchTerm(val);
-        if (!val || val.length < 2) return;
+        if (val.length < 2) { setSearchResults([]); return; }
+        setSearchResults(Object.keys(definitions).filter(k => k.toLowerCase().includes(val.toLowerCase())));
+    };
 
-        const matchingKey = Object.keys(definitions).find(key => key.toLowerCase().includes(val.toLowerCase()));
-        if (matchingKey) {
-            const nodes = d3.select(gRef.current).selectAll('.node');
-            nodes.each(function() {
-                if (d3.select(this).text().includes(matchingKey)) {
-                    const bbox = this.getBBox();
-                    const width = containerRef.current.clientWidth;
-                    const height = containerRef.current.clientHeight;
-                    const scale = 1.2;
-
-                    d3.select(svgRef.current).transition().duration(750).call(
-                        zoomRef.current.transform,
-                        d3.zoomIdentity
-                            .translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale)
-                            .scale(scale)
-                    );
-                    
-                    const node = d3.select(this);
-                    node.transition().duration(200).style('opacity', 0.5).transition().duration(500).style('opacity', 1);
-                }
+    const focusNode = (key) => {
+        const nodes = chartRef.current.querySelectorAll('.node');
+        let target = null;
+        nodes.forEach(n => { if (n.textContent.includes(key)) target = n; });
+        if (target) {
+            const rect = target.getBoundingClientRect();
+            const cont = containerRef.current.getBoundingClientRect();
+            // Calculation to center the node in the viewport
+            // This is a simplified version
+            setZoom(1.2);
+            setPan({
+                x: cont.width/2 - (target.offsetLeft || 0) * 1.2,
+                y: cont.height/2 - (target.offsetTop || 0) * 1.2
             });
+            target.style.filter = 'brightness(1.5)';
+            setTimeout(() => target.style.filter = '', 2000);
         }
+        setSearchTerm('');
+        setSearchResults([]);
     };
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" ref={containerRef}>
-            {/* Control Bar */}
-            <div className="absolute top-0 left-0 right-0 z-20 p-6 pointer-events-none">
-                <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 pointer-events-auto">
-                    <div className="bg-white/90 backdrop-blur shadow-xl border border-slate-200 rounded-2xl px-6 py-3 flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                        </div>
-                        <div>
-                            <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight">Mapa Conceptual Pro</h1>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Dinámica</p>
-                        </div>
+            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={handleSearch}
-                                placeholder="Buscar concepto..."
-                                className="w-64 pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold shadow-lg focus:ring-4 focus:ring-blue-500/10 outline-none"
-                            />
-                            <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
-                        </div>
-                        <button onClick={() => renderDiagram()} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-lg hover:bg-slate-50 transition-all"><svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2.5}/></svg></button>
+                    <div>
+                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Mapa Conceptual Pro</h2>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Táctil</p>
                     </div>
                 </div>
-            </div>
-
-            {/* Viewport */}
-            <div className="flex-1 w-full h-full cursor-grab active:cursor-grabbing relative bg-slate-100/50">
-                {isLoading && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="flex items-center gap-3 relative">
+                    <div className="relative">
+                        <input type="text" value={searchTerm} onChange={handleSearch} placeholder="Buscar concepto..." className="w-64 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-4 focus:ring-blue-500/10 outline-none" />
+                        <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
+                        {searchResults.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50">
+                                {searchResults.map(k => (
+                                    <button key={k} onClick={() => focusNode(k)} className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-[11px] font-bold text-slate-700 border-b last:border-0">{k}</button>
+                                ))}
+                            </div>
+                        )}
                     </div>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                        <button onClick={() => setZoom(z => Math.max(z-0.2, 0.1))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
+                        <button onClick={() => setZoom(z => Math.min(z+0.2, 4))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
+                    </div>
+                    <button onClick={() => { setZoom(0.8); setPan({x:50,y:50}); }} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl">Reset</button>
+                </div>
+            </div>
+            <div 
+                className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-slate-50 ${isDragging ? 'cursor-grabbing' : ''}`}
+                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+            >
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-30"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>
                 )}
-                <svg ref={svgRef} className="w-full h-full touch-none">
-                    <rect width="100%" height="100%" fill="transparent" />
-                    <g ref={gRef}></g>
-                </svg>
+                <div 
+                    style={{ 
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
+                        transformOrigin: '0 0',
+                        transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                    }}
+                    className="absolute whitespace-nowrap"
+                    ref={chartRef}
+                ></div>
             </div>
-
-            {/* Float Controls */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-slate-900 text-white p-2 rounded-2xl shadow-2xl border border-white/10">
-                <button onClick={() => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.7)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
-                <div className="w-px h-6 bg-white/10 mx-1"></div>
-                <button onClick={() => {
-                    const bbox = d3.select(gRef.current).node().getBBox();
-                    const width = containerRef.current.clientWidth;
-                    const height = containerRef.current.clientHeight;
-                    const scale = Math.min(width / bbox.width, height / bbox.height) * 0.8;
-                    d3.select(svgRef.current).transition().call(zoomRef.current.transform, d3.zoomIdentity.translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale).scale(scale));
-                }} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-all">Ajustar</button>
-                <div className="w-px h-6 bg-white/10 mx-1"></div>
-                <button onClick={() => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.3)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
-            </div>
-
-            {/* Modal */}
             <AnimatePresence>
                 {selectedTerm && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20">
                             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white relative">
                                 <h3 className="text-2xl font-black italic tracking-tighter leading-none">{selectedTerm.term}</h3>
                                 <button onClick={() => setSelectedTerm(null)} className="absolute top-6 right-6 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
