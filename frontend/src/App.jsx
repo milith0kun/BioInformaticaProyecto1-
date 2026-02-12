@@ -763,7 +763,7 @@ function App() {
                   </div>
                 )}
 
-                <div className={`bg-white rounded-[3rem] border border-slate-100 shadow-sm min-h-[800px] ${activeView === 'network-map' ? 'p-0 overflow-hidden' : 'p-10'}`}>
+                <div className={`bg-white rounded-[3rem] border border-slate-100 shadow-sm min-h-[800px] flex flex-col overflow-hidden ${activeView === 'network-map' || activeView === 'concept-map' ? 'p-0' : 'p-10'}`}>
                   {activeView === 'dashboard' && <AnalysisDashboard analysisData={analysisData} isLoading={isLoading} status={analysisData ? 'completed' : 'idle'} />}
                   {activeView === 'codons' && <CodonVisualization codonData={analysisData?.codons} />}
                   {activeView === 'comparison' && <ComparisonResults comparisonResult={comparisonResult} selectedGenomes={selectedGenomes} />}

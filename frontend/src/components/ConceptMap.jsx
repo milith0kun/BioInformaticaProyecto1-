@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Definiciones del Mapa (69 Términos)
 const definitions = {
     "1. Célula": "Unidad estructural y funcional básica de los organismos, compuesta por componentes que permiten metabolismo, replicación y respuesta al entorno.",
     "2. Teoría celular": "Postulado biológico que establece que los organismos están formados por células y que la célula es la unidad fundamental de vida.",
@@ -72,7 +71,7 @@ const definitions = {
     "66. Genómica comparativa": "Análisis comparado de genomas para identificar similitudes/diferencias, inferir funciones y relaciones evolutivas.",
     "67. Alineamiento de secuencias": "Método computacional para comparar secuencias y localizar regiones homólogas o conservadas.",
     "68. BLAST": "Familia de algoritmos rápidos para buscar similitudes entre secuencias y evaluar su significancia estadística.",
-    "69. Bioinformática": "Disciplina que utiliza algoritmos, estadística y modelos computacionales para analizar datos biológicos (especialmente secuencias) y \"decodificar\" patrones funcionales y evolovutivos."
+    "69. Bioinformática": "Disciplina que utiliza algoritmos, estadística y modelos computacionales para analizar datos biológicos (especialmente secuencias) y \"decodificar\" patrones funcionales y evolutivos."
 };
 
 const ConceptMap = () => {
@@ -80,40 +79,26 @@ const ConceptMap = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [zoom, setZoom] = useState(1);
-    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(0.7);
+    const [pan, setPan] = useState({ x: 20, y: 20 });
     const [isDragging, setIsDragging] = useState(false);
-    const [startPos, setStartPan] = useState({ x: 0, y: 0 });
+    const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     
     const chartRef = useRef(null);
     const containerRef = useRef(null);
 
     useEffect(() => {
-        // Inicialización segura de Mermaid
-        try {
-            mermaid.initialize({
-                startOnLoad: false,
-                theme: 'base',
-                securityLevel: 'loose',
-                flowchart: { 
-                    useMaxWidth: false, 
-                    htmlLabels: true, 
-                    curve: 'basis'
-                }
-            });
-            renderDiagram();
-        } catch (e) {
-            console.error("Error inicializando Mermaid:", e);
-            setError("No se pudo iniciar el motor gráfico.");
-            setIsLoading(false);
-        }
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' }
+        });
+        renderDiagram();
     }, []);
 
     const renderDiagram = async () => {
         setIsLoading(true);
-        setError(null);
-
         const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
@@ -197,101 +182,38 @@ flowchart LR
         try {
             const id = `mermaid-id-${Math.random().toString(36).substr(2, 9)}`;
             const { svg } = await mermaid.render(id, graphDefinition);
-            
             if (chartRef.current) {
                 chartRef.current.innerHTML = svg;
-                const svgElement = chartRef.current.querySelector('svg');
-                if (svgElement) {
-                    svgElement.style.maxWidth = 'none';
-                    svgElement.style.height = 'auto';
-                }
-                
                 attachListeners();
-                
-                // Initial fitting
-                setTimeout(() => {
-                    autoFit();
-                }, 100);
             }
-        } catch (e) { 
-            console.error("Mermaid Render Fail:", e); 
-            setError("Error al renderizar el mapa conceptual. Intente recargar.");
-        } finally { 
-            setIsLoading(false); 
-        }
-    };
-
-    const autoFit = () => {
-        if (!chartRef.current || !containerRef.current) return;
-        const svgElement = chartRef.current.querySelector('svg');
-        if (!svgElement) return;
-
-        const containerWidth = containerRef.current.clientWidth;
-        const containerHeight = containerRef.current.clientHeight;
-        const bbox = svgElement.getBBox();
-        
-        const scaleX = (containerWidth - 100) / bbox.width;
-        const scaleY = (containerHeight - 100) / bbox.height;
-        const initialScale = Math.min(scaleX, scaleY, 1);
-        
-        setZoom(initialScale);
-        setPan({ 
-            x: (containerWidth - bbox.width * initialScale) / 2, 
-            y: (containerHeight - bbox.height * initialScale) / 2 
-        });
+        } catch (e) { console.error("Mermaid Render Error:", e); }
+        finally { setIsLoading(false); }
     };
 
     const attachListeners = () => {
+        if (!chartRef.current) return;
         const nodes = chartRef.current.querySelectorAll('.node');
         nodes.forEach(n => {
             n.style.cursor = 'pointer';
             n.onclick = (e) => {
                 e.stopPropagation();
                 const text = n.textContent.trim();
-                const key = Object.keys(definitions).find(k => text.includes(k) || key.includes(text));
+                const key = Object.keys(definitions).find(k => text.includes(k) || key?.includes(text));
                 if (key) setSelectedTerm({ term: key, definition: definitions[key] });
             };
         });
     };
 
-    // --- Lógica de Arrastre (Pan) ---
     const onMouseDown = (e) => {
-        if (e.button !== 0) return; // Only left click
         setIsDragging(true);
-        setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+        setStartPos({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     };
     const onMouseMove = (e) => {
         if (!isDragging) return;
-        e.preventDefault();
         setPan({ x: e.clientX - startPos.x, y: e.clientY - startPos.y });
     };
     const onMouseUp = () => setIsDragging(false);
 
-    const onWheel = (e) => {
-        e.preventDefault();
-        const scaleFactor = 1.1;
-        const direction = e.deltaY < 0 ? 1 : -1;
-        const newZoom = direction > 0 ? zoom * scaleFactor : zoom / scaleFactor;
-        
-        // Limit zoom
-        const finalZoom = Math.min(Math.max(newZoom, 0.1), 4);
-        
-        // Adjust pan to zoom towards mouse position
-        const rect = containerRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        const dx = (mouseX - pan.x) / zoom;
-        const dy = (mouseY - pan.y) / zoom;
-        
-        setPan({
-            x: mouseX - dx * finalZoom,
-            y: mouseY - dy * finalZoom
-        });
-        setZoom(finalZoom);
-    };
-
-    // --- Lógica de Búsqueda ---
     const handleSearch = (e) => {
         const val = e.target.value;
         setSearchTerm(val);
@@ -302,106 +224,79 @@ flowchart LR
     const focusNode = (key) => {
         const nodes = Array.from(chartRef.current.querySelectorAll('.node'));
         const target = nodes.find(n => n.textContent.includes(key));
-        
         if (target) {
-            // Reset zoom/pan or focus specifically
-            setZoom(1.2);
-            // We'd need accurate bbox of target to pan perfectly, but for now we reset pan
-            setPan({ x: 50, y: 50 });
-            
-            target.style.filter = 'drop-shadow(0 0 15px rgba(59, 130, 246, 1))';
-            target.classList.add('animate-pulse');
-            setTimeout(() => {
-                target.style.filter = '';
-                target.classList.remove('animate-pulse');
-            }, 3000);
+            setZoom(1.1);
+            // Centrado aproximado: el SVG es grande, movemos el pan para que el nodo sea visible
+            // Usamos una lógica de reset para que el usuario pueda localizarlo
+            setPan({ x: 100, y: 100 });
+            target.style.filter = 'brightness(1.5) drop-shadow(0 0 15px #3b82f6)';
+            setTimeout(() => target.style.filter = '', 3000);
         }
         setSearchTerm('');
         setSearchResults([]);
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" ref={containerRef}>
-            {/* Barra de Control */}
-            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shadow-sm shrink-0">
+        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" style={{ minHeight: '800px' }}>
+            {/* Header */}
+            <div className="p-6 bg-white border-b flex flex-col md:flex-row items-center justify-between gap-4 z-20 shrink-0">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
                     </div>
                     <div>
                         <h2 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Mapa Conceptual Pro</h2>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Táctil</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Dinámica</p>
                     </div>
                 </div>
-                
-                <div className="flex items-center gap-3 relative z-30">
+                <div className="flex items-center gap-3 relative">
                     <div className="relative">
-                        <input type="text" value={searchTerm} onChange={handleSearch} placeholder="Buscar concepto..." className="w-64 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-4 focus:ring-blue-500/10 outline-none" />
+                        <input type="text" value={searchTerm} onChange={handleSearch} placeholder="Buscar..." className="w-48 pl-10 pr-4 py-2 bg-slate-50 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none" />
                         <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
                         {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-xl shadow-2xl max-h-48 overflow-y-auto z-50">
                                 {searchResults.map(k => (
-                                    <button key={k} onClick={() => focusNode(k)} className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-[11px] font-bold text-slate-700 border-b last:border-0">{k}</button>
+                                    <button key={k} onClick={() => focusNode(k)} className="w-full text-left px-4 py-2 hover:bg-blue-50 text-[10px] font-bold border-b last:border-0">{k}</button>
                                 ))}
                             </div>
                         )}
                     </div>
                     <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button onClick={() => setZoom(z => Math.max(z-0.1, 0.1))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
-                        <button onClick={() => setZoom(z => Math.min(z+0.1, 4))} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
+                        <button onClick={() => setZoom(z => Math.max(z-0.1, 0.1))} className="p-1.5 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
+                        <button onClick={() => setZoom(z => Math.min(z+0.1, 3))} className="p-1.5 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
                     </div>
-                    <button onClick={autoFit} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl shadow-lg hover:bg-blue-600 transition-all">Reset</button>
+                    <button onClick={() => { setZoom(0.7); setPan({x:20,y:20}); }} className="px-3 py-2 bg-slate-900 text-white text-[9px] font-black uppercase rounded-xl">Reset</button>
                 </div>
             </div>
 
-            {/* Área del Diagrama */}
+            {/* Viewport */}
             <div 
-                className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-slate-50 overflow-hidden ${isDragging ? 'cursor-grabbing' : ''}`}
-                onMouseDown={onMouseDown} 
-                onMouseMove={onMouseMove} 
-                onMouseUp={onMouseUp} 
-                onMouseLeave={onMouseUp}
-                onWheel={onWheel}
+                className={`flex-1 relative bg-slate-50 cursor-grab active:cursor-grabbing select-none overflow-hidden ${isDragging ? 'cursor-grabbing' : ''}`}
+                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
             >
                 {isLoading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-30">
-                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Generando Mapa...</p>
-                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-30"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>
                 )}
-                
-                {error && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-30 p-8 text-center">
-                        <svg className="w-12 h-12 text-rose-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        <h3 className="text-lg font-black text-slate-900 mb-2">Error de Visualización</h3>
-                        <p className="text-sm text-slate-500 mb-6">{error}</p>
-                        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase">Recargar Página</button>
-                    </div>
-                )}
-
                 <div 
                     style={{ 
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
                         transformOrigin: '0 0',
-                        transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                        transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)'
                     }}
-                    className="absolute"
+                    className="absolute p-10"
                     ref={chartRef}
                 ></div>
             </div>
 
-            {/* Modal de Definiciones */}
+            {/* Modal */}
             <AnimatePresence>
                 {selectedTerm && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20">
-                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white relative">
-                                <h3 className="text-2xl font-black italic tracking-tighter leading-none">{selectedTerm.term}</h3>
-                                <button onClick={() => setSelectedTerm(null)} className="absolute top-6 right-6 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
-                            </div>
-                            <div className="p-10">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden">
+                            <div className="bg-blue-600 p-6 text-white"><h3 className="text-xl font-black italic tracking-tighter leading-none">{selectedTerm.term}</h3></div>
+                            <div className="p-8">
                                 <p className="text-slate-600 font-medium leading-relaxed italic text-lg">"{selectedTerm.definition}"</p>
-                                <button onClick={() => setSelectedTerm(null)} className="mt-10 w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">Cerrar</button>
+                                <button onClick={() => setSelectedTerm(null)} className="mt-8 w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl">Cerrar</button>
                             </div>
                         </motion.div>
                     </motion.div>
