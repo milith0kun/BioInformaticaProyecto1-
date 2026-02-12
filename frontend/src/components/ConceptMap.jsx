@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as d3 from 'd3';
 
 // Definiciones del Mapa (69 Términos)
 const definitions = {
@@ -18,7 +19,7 @@ const definitions = {
     "12. Mutación": "Cambio en la secuencia de ADN (p. ej., sustitución de base) que puede alterar un rasgo o función biológica.",
     "13. Ligamiento genético": "Tendencia de genes cercanos en un cromosoma a heredarse juntos, debido a menor probabilidad de recombinación entre ellos.",
     "14. Mapa genético": "Ordenamiento relativo de genes en un cromosoma estimado a partir de frecuencias de recombinación (distancia genética).",
-    "15. Un gen–una proteína": "Hipótesis histórica que asocia cada gen con la producción de una proteína; hoy se reconoce que un gen puede originar múltiples productos (p. ej., por splicing alternativo).",
+    "15. Un gen–una proteína": "Hypótesis histórica que asocia cada gen con la producción de una proteína; hoy se reconoce que un gen puede originar múltiples productos (p. ej., por splicing alternativo).",
     "16. Nucleótido": "Unidad básica de ADN/ARN compuesta por una base nitrogenada, un azúcar y un grupo fosfato.",
     "17. Bases nitrogenadas": "A (adenina), T (timina, solo ADN), U (uracilo, solo ARN), G (guanina), C (citosina).",
     "18. Regla de Chargaff": "Observación de que en ADN bicatenario la cantidad de A≈T y G≈C, consistente con apareamiento complementario.",
@@ -72,22 +73,18 @@ const definitions = {
     "66. Genómica comparativa": "Análisis comparado de genomas para identificar similitudes/diferencias, inferir funciones y relaciones evolutivas.",
     "67. Alineamiento de secuencias": "Método computacional para comparar secuencias y localizar regiones homólogas o conservadas.",
     "68. BLAST": "Familia de algoritmos rápidos para buscar similitudes entre secuencias y evaluar su significancia estadística.",
-    "69. Bioinformática": "Disciplina que utiliza algoritmos, estadística y modelos computacionales para analizar datos biológicos (especialmente secuencias) y \"decodificar\" patrones funcionales y evolutivos."
+    "69. Bioinformática": "Disciplina que utiliza algoritmos, estadística y modelos computacionales para analizar datos biológicos (especialmente secuencias) y \"decodificar\" patrones funcionales y evolovutivos."
 };
 
 const ConceptMap = () => {
-    const [zoomLevel, setZoomLevel] = useState(1);
     const [selectedTerm, setSelectedTerm] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     
-    const chartRef = useRef(null);
+    const svgRef = useRef(null);
+    const gRef = useRef(null);
     const containerRef = useRef(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const [startX, setStartX] = useState(0);
-    const [startY, setStartY] = useState(0);
-    const [scrollLeft, setScrollLeft] = useState(0);
-    const [scrollTop, setScrollTop] = useState(0);
+    const zoomRef = useRef(null);
 
     useEffect(() => {
         mermaid.initialize({
@@ -97,11 +94,14 @@ const ConceptMap = () => {
             flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' }
         });
 
-        const renderDiagram = async () => {
-            if (!chartRef.current) return;
-            setIsLoading(true);
+        renderDiagram();
+    }, []);
 
-            const graphDefinition = `
+    const renderDiagram = async () => {
+        if (!svgRef.current) return;
+        setIsLoading(true);
+
+        const graphDefinition = `
 flowchart LR
     classDef default fill:#fff,stroke:#cbd5e1,stroke-width:2px,color:#1e293b,font-weight:bold,rx:10,ry:10;
     classDef highlight fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1d4ed8;
@@ -182,167 +182,159 @@ flowchart LR
     C66 -->|se apoya en| C69["69. Bioinformática"]:::highlight
 `;
 
-            try {
-                const id = `mermaid-concept-map-${Date.now()}`;
-                const { svg } = await mermaid.render(id, graphDefinition);
-                if (chartRef.current) {
-                    chartRef.current.innerHTML = svg;
-                    attachClickListeners();
-                    setTimeout(fitToScreen, 200);
-                }
-            } catch (error) {
-                console.error('Mermaid error:', error);
-            } finally {
-                setIsLoading(false);
+        try {
+            const id = `mermaid-render-${Date.now()}`;
+            const { svg: svgContent } = await mermaid.render(id, graphDefinition);
+            if (gRef.current) {
+                gRef.current.innerHTML = svgContent;
+                setupD3Zoom();
             }
-        };
+        } catch (error) {
+            console.error('Mermaid render error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        const attachClickListeners = () => {
-            const nodes = chartRef.current.querySelectorAll('.node');
-            nodes.forEach(node => {
-                node.style.cursor = 'pointer';
-                node.onclick = (e) => {
-                    e.stopPropagation();
-                    const text = node.textContent.trim();
-                    const matchingKey = Object.keys(definitions).find(key => text.includes(key) || key.includes(text));
-                    if (matchingKey) {
-                        setSelectedTerm({ term: matchingKey, definition: definitions[matchingKey] });
-                    }
-                };
+    const setupD3Zoom = () => {
+        const svg = d3.select(svgRef.current);
+        const g = d3.select(gRef.current);
+        
+        // Fix mermaid SVG to be responsive
+        const mermaidSvg = g.select('svg');
+        mermaidSvg.attr('width', '100%').attr('height', '100%').attr('preserveAspectRatio', 'xMinYMin meet');
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.05, 5])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
             });
-        };
 
-        renderDiagram();
-    }, []);
+        zoomRef.current = zoom;
+        svg.call(zoom);
 
-    const zoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 4));
-    const zoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.2));
-    const resetZoom = () => setZoomLevel(1);
-    const fitToScreen = () => setZoomLevel(0.4); // Forced zoom out for initial full view
+        // Initial fit
+        const bbox = g.node().getBBox();
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        const scale = Math.min(width / bbox.width, height / bbox.height) * 0.8;
+        
+        svg.call(zoom.transform, d3.zoomIdentity
+            .translate(width / 2 - (bbox.x + bbox.width / 2) * scale, height / 2 - (bbox.y + bbox.height / 2) * scale)
+            .scale(scale)
+        );
+
+        // Click events for nodes
+        g.selectAll('.node').on('click', function(event) {
+            event.stopPropagation();
+            const text = d3.select(this).text().trim();
+            const matchingKey = Object.keys(definitions).find(key => text.includes(key) || key.includes(text));
+            if (matchingKey) {
+                setSelectedTerm({ term: matchingKey, definition: definitions[matchingKey] });
+            }
+        });
+    };
 
     const handleSearch = (e) => {
         const val = e.target.value;
         setSearchTerm(val);
         if (!val || val.length < 2) return;
-        
-        const nodes = chartRef.current.querySelectorAll('.node');
-        nodes.forEach(node => {
-            if (node.textContent.toLowerCase().includes(val.toLowerCase())) {
-                node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-                // Simple highlight
-                node.style.filter = 'brightness(1.2) drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))';
-                setTimeout(() => { node.style.filter = ''; }, 2000);
-            }
-        });
-    };
 
-    const handleMouseDown = (e) => {
-        setIsDragging(true);
-        setStartX(e.pageX - containerRef.current.offsetLeft);
-        setStartY(e.pageY - containerRef.current.offsetTop);
-        setScrollLeft(containerRef.current.scrollLeft);
-        setScrollTop(containerRef.current.scrollTop);
-    };
+        const matchingKey = Object.keys(definitions).find(key => key.toLowerCase().includes(val.toLowerCase()));
+        if (matchingKey) {
+            const nodes = d3.select(gRef.current).selectAll('.node');
+            nodes.each(function() {
+                if (d3.select(this).text().includes(matchingKey)) {
+                    const bbox = this.getBBox();
+                    const width = containerRef.current.clientWidth;
+                    const height = containerRef.current.clientHeight;
+                    const scale = 1.2;
 
-    const handleMouseLeave = () => {
-        setIsDragging(false);
-    };
-
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
-
-    const handleMouseMove = (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-        const x = e.pageX - containerRef.current.offsetLeft;
-        const y = e.pageY - containerRef.current.offsetTop;
-        const walkX = (x - startX) * 1.5; // multiplicador de velocidad
-        const walkY = (y - startY) * 1.5;
-        containerRef.current.scrollLeft = scrollLeft - walkX;
-        containerRef.current.scrollTop = scrollTop - walkY;
+                    d3.select(svgRef.current).transition().duration(750).call(
+                        zoomRef.current.transform,
+                        d3.zoomIdentity
+                            .translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale)
+                            .scale(scale)
+                    );
+                    
+                    const node = d3.select(this);
+                    node.transition().duration(200).style('opacity', 0.5).transition().duration(500).style('opacity', 1);
+                }
+            });
+        }
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden">
-            {/* Header / Search */}
-            <div className="p-6 bg-white border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 z-10">
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" ref={containerRef}>
+            {/* Control Bar */}
+            <div className="absolute top-0 left-0 right-0 z-20 p-6 pointer-events-none">
+                <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 pointer-events-auto">
+                    <div className="bg-white/90 backdrop-blur shadow-xl border border-slate-200 rounded-2xl px-6 py-3 flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        </div>
+                        <div>
+                            <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight">Mapa Conceptual Pro</h1>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Navegación Dinámica</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Mapa de Conceptos</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Biología Molecular</p>
-                    </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={handleSearch}
-                        placeholder="Buscar concepto..."
-                        className="px-4 py-2 text-[10px] font-bold border border-slate-200 rounded-xl w-48 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                    <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button onClick={zoomOut} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={2.5}/></svg></button>
-                        <button onClick={zoomIn} className="p-2 hover:bg-white rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={2.5}/></svg></button>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={handleSearch}
+                                placeholder="Buscar concepto..."
+                                className="w-64 pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold shadow-lg focus:ring-4 focus:ring-blue-500/10 outline-none"
+                            />
+                            <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={3}/></svg>
+                        </div>
+                        <button onClick={() => renderDiagram()} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-lg hover:bg-slate-50 transition-all"><svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2.5}/></svg></button>
                     </div>
-                    <button onClick={resetZoom} className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl">Reset</button>
                 </div>
             </div>
 
-            {/* Diagram Area */}
-            <div 
-                ref={containerRef}
-                onMouseDown={handleMouseDown}
-                onMouseLeave={handleMouseLeave}
-                onMouseUp={handleMouseUp}
-                onMouseMove={handleMouseMove}
-                className={`flex-1 overflow-auto bg-slate-50 relative p-10 select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-            >
+            {/* Viewport */}
+            <div className="flex-1 w-full h-full cursor-grab active:cursor-grabbing relative bg-slate-100/50">
                 {isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
-                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 )}
-                <div 
-                    style={{ 
-                        transform: `scale(${zoomLevel})`, 
-                        transformOrigin: '0 0',
-                        transition: 'transform 0.2s ease-out'
-                    }}
-                    className="inline-block"
-                >
-                    <div ref={chartRef}></div>
-                </div>
+                <svg ref={svgRef} className="w-full h-full touch-none">
+                    <rect width="100%" height="100%" fill="transparent" />
+                    <g ref={gRef}></g>
+                </svg>
+            </div>
+
+            {/* Float Controls */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-slate-900 text-white p-2 rounded-2xl shadow-2xl border border-white/10">
+                <button onClick={() => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.7)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={3}/></svg></button>
+                <div className="w-px h-6 bg-white/10 mx-1"></div>
+                <button onClick={() => {
+                    const bbox = d3.select(gRef.current).node().getBBox();
+                    const width = containerRef.current.clientWidth;
+                    const height = containerRef.current.clientHeight;
+                    const scale = Math.min(width / bbox.width, height / bbox.height) * 0.8;
+                    d3.select(svgRef.current).transition().call(zoomRef.current.transform, d3.zoomIdentity.translate(width/2 - (bbox.x + bbox.width/2)*scale, height/2 - (bbox.y + bbox.height/2)*scale).scale(scale));
+                }} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-all">Ajustar</button>
+                <div className="w-px h-6 bg-white/10 mx-1"></div>
+                <button onClick={() => d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.3)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg></button>
             </div>
 
             {/* Modal */}
             <AnimatePresence>
                 {selectedTerm && (
-                    <motion.div 
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        onClick={() => setSelectedTerm(null)}
-                        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6"
-                    >
-                        <motion.div 
-                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden"
-                        >
-                            <div className="bg-blue-600 p-8 text-white">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTerm(null)} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20">
+                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white relative">
                                 <h3 className="text-2xl font-black italic tracking-tighter leading-none">{selectedTerm.term}</h3>
+                                <button onClick={() => setSelectedTerm(null)} className="absolute top-6 right-6 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
                             </div>
-                            <div className="p-8">
+                            <div className="p-10">
                                 <p className="text-slate-600 font-medium leading-relaxed italic text-lg">"{selectedTerm.definition}"</p>
-                                <button 
-                                    onClick={() => setSelectedTerm(null)}
-                                    className="mt-8 w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-600 transition-all"
-                                >
-                                    Cerrar
-                                </button>
+                                <button onClick={() => setSelectedTerm(null)} className="mt-10 w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">Cerrar</button>
                             </div>
                         </motion.div>
                     </motion.div>

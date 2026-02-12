@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -196,10 +196,7 @@ const NetworkMap = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedTooltip, setSelectedTooltip] = useState(null);
-    const [zoomLevel, setZoomLevel] = useState(1);
-
     const [simulation, setSimulation] = useState(null);
-    const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity);
     const nodesRef = useRef([]);
 
     // --- COLORS ---
@@ -224,23 +221,9 @@ const NetworkMap = () => {
             .attr("height", height)
             .attr("viewBox", [0, 0, width, height]);
 
-        svg.selectAll("*").remove(); // Clear previous render
+        svg.selectAll("*").remove(); 
 
-        // --- DEFS ---
         const defs = svg.append("defs");
-        const filter = defs.append("filter")
-            .attr("id", "glow")
-            .attr("x", "-50%")
-            .attr("y", "-50%")
-            .attr("width", "200%")
-            .attr("height", "200%");
-        filter.append("feGaussianBlur")
-            .attr("stdDeviation", "3")
-            .attr("result", "coloredBlur");
-        const feMerge = filter.append("feMerge");
-        feMerge.append("feMergeNode").attr("in", "coloredBlur");
-        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
-
         defs.append("marker")
             .attr("id", "arrow-normal")
             .attr("viewBox", "0 -5 10 10")
@@ -253,34 +236,34 @@ const NetworkMap = () => {
             .attr("d", "M0,-5L10,0L0,5")
             .attr("fill", "#999");
 
-        // --- GROUPS ---
         const g = svg.append("g");
-        const linkHitAreaGroup = g.append("g").attr("class", "link-hit-areas");
+
+        // Transparent background for zoom
+        g.append("rect")
+            .attr("width", width * 4)
+            .attr("height", height * 4)
+            .attr("x", -width * 2)
+            .attr("y", -height * 2)
+            .attr("fill", "transparent")
+            .style("pointer-events", "all");
+
         const linkGroup = g.append("g").attr("class", "links");
         const linkLabelGroup = g.append("g").attr("class", "link-labels");
         const nodeGroup = g.append("g").attr("class", "nodes");
         const labelGroup = g.append("g").attr("class", "labels");
 
-        // --- SIMULATION ---
-        // Clone data to avoid mutation issues in React strict mode
         const nodes = graphData.nodes.map(d => ({ ...d }));
         const links = graphData.links.map(d => ({ ...d }));
         nodesRef.current = nodes;
 
-        // Calculate radius
         const nodeConnections = {};
         nodes.forEach(n => nodeConnections[n.id] = 0);
         links.forEach(l => {
-            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-            nodeConnections[sourceId] = (nodeConnections[sourceId] || 0) + 1;
-            nodeConnections[targetId] = (nodeConnections[targetId] || 0) + 1;
+            nodeConnections[l.source] = (nodeConnections[l.source] || 0) + 1;
+            nodeConnections[l.target] = (nodeConnections[l.target] || 0) + 1;
         });
         const maxConnections = Math.max(...Object.values(nodeConnections), 1);
-        const getNodeRadius = (nodeId) => {
-            const connections = nodeConnections[nodeId] || 0;
-            return 8 + (connections / maxConnections) * 8;
-        };
+        const getNodeRadius = (nodeId) => 8 + ((nodeConnections[nodeId] || 0) / maxConnections) * 8;
 
         const sim = d3.forceSimulation(nodes)
             .force("link", d3.forceLink(links).id(d => d.id).distance(120))
@@ -288,20 +271,18 @@ const NetworkMap = () => {
             .force("center", d3.forceCenter(width / 2, height / 2))
             .force("collide", d3.forceCollide().radius(d => getNodeRadius(d.id) + 15));
 
-        // --- DRAWING ---
         const link = linkGroup.selectAll("line")
             .data(links)
             .join("line")
-            .attr("stroke", "#999")
-            .attr("stroke-width", 2)
-            .attr("stroke-opacity", 0.5)
+            .attr("stroke", "#cbd5e1")
+            .attr("stroke-width", 1.5)
             .attr("marker-end", "url(#arrow-normal)");
 
         const linkLabel = linkLabelGroup.selectAll("text")
             .data(links)
             .join("text")
-            .attr("font-size", "9px")
-            .attr("fill", "#666")
+            .attr("font-size", "8px")
+            .attr("fill", "#94a3b8")
             .attr("text-anchor", "middle")
             .text(d => d.label);
 
@@ -317,255 +298,123 @@ const NetworkMap = () => {
                 focusOnNode(d);
                 event.stopPropagation();
             })
+            .on("mouseover", (event, d) => {
+                setSelectedTooltip({
+                    x: event.clientX,
+                    y: event.clientY,
+                    data: d
+                });
+            })
+            .on("mousemove", (event) => {
+                setSelectedTooltip(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
+            })
+            .on("mouseout", () => setSelectedTooltip(null))
             .call(d3.drag()
                 .on("start", (event, d) => {
                     if (!event.active) sim.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
+                    d.fx = d.x; d.fy = d.y;
                 })
                 .on("drag", (event, d) => {
-                    d.fx = event.x;
-                    d.fy = event.y;
+                    d.fx = event.x; d.fy = event.y;
                 })
                 .on("end", (event, d) => {
                     if (!event.active) sim.alphaTarget(0);
-                    d.fx = null;
-                    d.fy = null;
+                    d.fx = null; d.fy = null;
                 })
             );
 
         const label = labelGroup.selectAll("text")
             .data(nodes)
             .join("text")
-            .attr("font-size", "10px")
-            .attr("font-weight", "600")
-            .attr("dx", d => getNodeRadius(d.id) + 4)
-            .attr("dy", 4)
-            .text(d => d.label || d.id)
-            .style("pointer-events", "none")
-            .style("text-shadow", "1px 1px 2px white");
+            .attr("font-size", "9px")
+            .attr("font-weight", "700")
+            .attr("dx", d => getNodeRadius(d.id) + 5)
+            .attr("dy", 3)
+            .text(d => d.label)
+            .style("pointer-events", "none");
 
-        // --- UPDATES ---
         sim.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
-
-            linkLabel
-                .attr("x", d => (d.source.x + d.target.x) / 2)
-                .attr("y", d => (d.source.y + d.target.y) / 2);
-
-            node
-                .attr("cx", d => d.x)
-                .attr("cy", d => d.y);
-
-            label
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
+            link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            linkLabel.attr("x", d => (d.source.x + d.target.x) / 2).attr("y", d => (d.source.y + d.target.y) / 2);
+            node.attr("cx", d => d.x).attr("cy", d => d.y);
+            label.attr("x", d => d.x).attr("y", d => d.y);
         });
 
-        // --- ZOOM ---
-        const zoomBehavior = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (event) => {
-                g.attr("transform", event.transform);
-                setZoomTransform(event.transform);
-            });
+        const zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => g.attr("transform", event.transform));
+        svg.call(zoom);
 
-        svg.call(zoomBehavior);
-
-        // --- TOOLTIPS ---
-        node.on("mouseover", (event, d) => {
-            setSelectedTooltip({
-                x: event.pageX,
-                y: event.pageY,
-                data: d
-            });
-        }).on("mouseout", () => {
-            setSelectedTooltip(null);
-        });
-
-        // Save references
         setSimulation(sim);
-
-        return () => {
-            sim.stop();
-        };
+        return () => sim.stop();
     }, []);
 
-    // Focus mechanism
     const focusOnNode = (node) => {
-        if (!svgRef.current || !node || !containerRef.current) return;
-
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
-        const scale = 2.5; // Zoom in closer
-
-        // Center the node: width/2 = x * k + tx  =>  tx = width/2 - x * k
-        const tx = width / 2 - node.x * scale;
-        const ty = height / 2 - node.y * scale;
-
-        const svg = d3.select(svgRef.current);
-        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
-
-        svg.transition()
-            .duration(1000)
-            .call(d3.zoom().on("zoom", (e) => {
-                svg.select("g").attr("transform", e.transform);
-                setZoomTransform(e.transform);
-            }).transform, transform);
-
-        // Highlight visual feedback
-        setSelectedTooltip({
-            x: width / 2 - 100, // Approximate center
-            y: height / 2 - 100,
-            data: node
-        });
+        const scale = 2;
+        const transform = d3.zoomIdentity.translate(width / 2 - node.x * scale, height / 2 - node.y * scale).scale(scale);
+        d3.select(svgRef.current).transition().duration(1000).call(d3.zoom().transform, transform);
     };
 
-    // Search functionality
     useEffect(() => {
-        if (!searchTerm || searchTerm.length < 1) {
-            setSearchResults([]);
-            return;
-        }
-        const term = searchTerm.toLowerCase();
-        const matches = graphData.nodes.filter(n =>
-            (n.label || n.id).toLowerCase().includes(term) ||
-            (n.concepto || "").toLowerCase().includes(term)
-        ).sort((a, b) => {
-            const aLabel = (a.label || "").toLowerCase();
-            const bLabel = (b.label || "").toLowerCase();
-            const aStarts = aLabel.startsWith(term);
-            const bStarts = bLabel.startsWith(term);
-            if (aStarts && !bStarts) return -1;
-            if (!aStarts && bStarts) return 1;
-            return 0;
-        });
+        if (!searchTerm) { setSearchResults([]); return; }
+        const matches = graphData.nodes.filter(n => n.label.toLowerCase().includes(searchTerm.toLowerCase()));
         setSearchResults(matches);
     }, [searchTerm]);
 
-    const zoomIn = () => {
-        const svg = d3.select(svgRef.current);
-        svg.transition().call(d3.zoom().on("zoom", (e) => {
-            svg.select("g").attr("transform", e.transform);
-            setZoomTransform(e.transform);
-        }).scaleBy, 1.2);
-    };
-
-    const zoomOut = () => {
-        const svg = d3.select(svgRef.current);
-        svg.transition().call(d3.zoom().on("zoom", (e) => {
-            svg.select("g").attr("transform", e.transform);
-            setZoomTransform(e.transform);
-        }).scaleBy, 0.8);
-    };
-
-    const resetZoom = () => {
-        const svg = d3.select(svgRef.current);
-        svg.transition().call(d3.zoom().on("zoom", (e) => {
-            svg.select("g").attr("transform", e.transform);
-            setZoomTransform(e.transform);
-        }).transform, d3.zoomIdentity);
-    };
-
-    // Auto-organize (re-heat simulation)
-    const autoOrganize = () => {
-        if (simulation) {
-            simulation.alpha(1).restart();
-        }
-    };
-
     return (
         <div className="relative w-full h-[800px] bg-slate-50 overflow-hidden" ref={containerRef}>
-            {/* Header Controls */}
-            <div className="absolute top-0 left-0 right-0 z-10 p-4 flex justify-between items-start pointer-events-none">
-                <div className="bg-white/90 backdrop-blur shadow-sm border border-slate-200 rounded-2xl p-4 pointer-events-auto">
-                    <h1 className="text-xl font-black text-slate-800 uppercase tracking-tight">Red Genómica</h1>
-                    <div className="mt-2 relative">
+            <div className="absolute top-0 left-0 right-0 z-10 p-6 flex justify-between items-start pointer-events-none">
+                <div className="bg-white/90 backdrop-blur shadow-2xl border border-slate-200 rounded-2xl p-4 pointer-events-auto">
+                    <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">Red Genómica</h1>
+                    <div className="mt-3 relative">
                         <input
                             type="text"
-                            placeholder="Buscar N° o concepto..."
-                            className="w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Buscar concepto..."
+                            className="w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-4 focus:ring-blue-500/10 outline-none"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                         {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto z-20">
-                                {searchResults.map((result) => (
-                                    <div
-                                        key={result.id}
-                                        className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
-                                        onClick={() => {
-                                            const activeNode = nodesRef.current.find(n => n.id === result.id);
-                                            if (activeNode) {
-                                                focusOnNode(activeNode);
-                                            }
-                                            setSearchTerm(result.label);
-                                            setSearchResults([]);
-                                        }}
-                                    >
-                                        <div className="font-bold text-xs text-slate-800">{result.label}</div>
-                                        <div className="text-[10px] text-slate-500 truncate">{result.concepto}</div>
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-20">
+                                {searchResults.map((r) => (
+                                    <div key={r.id} className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => {
+                                        const node = nodesRef.current.find(n => n.id === r.id);
+                                        if (node) focusOnNode(node);
+                                        setSearchTerm('');
+                                    }}>
+                                        <div className="font-bold text-xs text-slate-800">{r.label}</div>
+                                        <div className="text-[10px] text-slate-500 truncate">{r.concepto}</div>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
                 </div>
-
                 <div className="flex gap-2 pointer-events-auto">
-                    <button onClick={autoOrganize} className="px-4 py-2 bg-white text-slate-600 rounded-xl font-bold text-xs shadow-sm border border-slate-200 hover:bg-slate-50">
-                        Auto-organizar
-                    </button>
-                    <button onClick={resetZoom} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-blue-200 hover:bg-blue-700">
-                        Centrar
-                    </button>
+                    <button onClick={() => simulation.alpha(1).restart()} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 shadow-lg">Reiniciar</button>
+                    <button onClick={() => d3.select(svgRef.current).transition().call(d3.zoom().transform, d3.zoomIdentity)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-200">Centrar</button>
                 </div>
             </div>
 
-            {/* SVG Canvas */}
-            <svg ref={svgRef} className="w-full h-full cursor-move"></svg>
+            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
 
-            {/* Tooltip Overlay */}
             <AnimatePresence>
                 {selectedTooltip && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{ left: selectedTooltip.x + 20, top: selectedTooltip.y + 20 }}
-                        className="fixed z-50 bg-white/95 backdrop-blur border-l-4 border-blue-500 shadow-2xl p-4 rounded-r-xl max-w-xs pointer-events-none"
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        style={{ position: 'fixed', left: selectedTooltip.x + 20, top: selectedTooltip.y + 20, zIndex: 1000 }}
+                        className="bg-slate-900/95 backdrop-blur text-white shadow-2xl p-5 rounded-2xl max-w-xs pointer-events-none border border-white/10"
                     >
-                        <h3 className="font-bold text-slate-800 text-sm mb-1">{selectedTooltip.data.label}</h3>
-                        <p className="text-xs text-slate-600 leading-relaxed font-medium">{selectedTooltip.data.concepto}</p>
-                        <div className="mt-2 text-[10px] uppercase font-black text-slate-400 tracking-wider">
-                            Grupo: {selectedTooltip.data.group}
+                        <h3 className="font-black text-blue-400 text-xs uppercase tracking-widest mb-2">{selectedTooltip.data.label}</h3>
+                        <p className="text-xs text-slate-200 leading-relaxed font-medium italic">"{selectedTooltip.data.concepto}"</p>
+                        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
+                            <span className="text-[9px] font-black text-slate-500 uppercase">Categoría: {selectedTooltip.data.group}</span>
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* Legend */}
-            <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur p-4 rounded-2xl border border-slate-200 shadow-lg text-xs pointer-events-none">
-                <h4 className="font-black text-slate-400 uppercase tracking-wider mb-2 text-[10px]">Categorías</h4>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                    {Object.entries(groupColors).map(([key, colors]) => (
-                        <div key={key} className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full border-2" style={{ backgroundColor: colors.fill, borderColor: colors.stroke }}></div>
-                            <span className="capitalize text-slate-600 font-bold">{key}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Zoom Controls */}
-            <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-auto">
-                <button onClick={zoomIn} className="w-10 h-10 bg-white rounded-xl shadow-lg border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 font-bold text-lg">+</button>
-                <button onClick={zoomOut} className="w-10 h-10 bg-white rounded-xl shadow-lg border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 font-bold text-lg">-</button>
-            </div>
         </div>
     );
 };
